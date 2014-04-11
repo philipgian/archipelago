@@ -1,0 +1,3 @@
+usr/bin/archip-zookeeperd
+
+etc/archipelago/archipelago.conf.zookeeper_example

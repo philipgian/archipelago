@@ -35,6 +35,14 @@ Depends: ${misc:Depends}, ${shlibs:Depends}, archipelago-protocol1,
 Description: Provides archipelago rados driver
  Extended Description here
 
+Package: archipelago-zookeeper
+Architecture: amd64
+Depends: ${misc:Depends}, ${shlibs:Depends},
+ archipelago-protocol1, libxseg0(>=0.3), libxseg0(<<0.4),
+ python-archipelago(=${binary:Version}), python-kazoo(>=0.9)
+Description: Provides archipelago zookeeper driver
+ Extended Description here
+
 Package: archipelago-dbg
 Architecture: amd64
 Section: debug
