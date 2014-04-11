@@ -75,7 +75,7 @@ print "PACKAGE_DIR", PACKAGE_DIR
 CLASSIFIERS = []
 
 # Package requirements
-INSTALL_REQUIRES = ['xseg', 'argparse', 'psutil']
+INSTALL_REQUIRES = ['xseg', 'argparse', 'psutil', 'gevent', 'python-daemon']
 
 EXTRAS_REQUIRES = {
 }
