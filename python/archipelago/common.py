@@ -868,7 +868,28 @@ class Xseg_ctx(object):
             xseg_leave(self.ctx)
         self.ctx = None
 
+    def _wait_request(self):
+        xseg_prepare_wait(self.ctx, self.portno)
+        received = xseg_accept(self.ctx, self.portno, 0)
+        if received:
+            xseg_cancel_wait(self.ctx, self.portno)
+            return received
+        else:
+            xseg_wait_signal_green(self.ctx, self.signal_desc, 3000000)
+            xseg_cancel_wait(self.ctx, self.portno)
+            return xseg_accept(self.ctx, self.portno, 0)
+
     def wait_request(self):
+        xseg_prepare_wait(self.ctx, self.portno)
+        while True:
+            received = xseg_accept(self.ctx, self.portno, 0)
+            if received:
+                xseg_cancel_wait(self.ctx, self.portno)
+                return received
+            else:
+                xseg_wait_signal_green(self.ctx, self.signal_desc, 10000000)
+
+    def wait_reply(self):
         xseg_prepare_wait(self.ctx, self.portno)
         while True:
             received = xseg_receive(self.ctx, self.portno, 0)
@@ -880,7 +901,7 @@ class Xseg_ctx(object):
 
     def wait_requests(self, requests):
         while True:
-            received = self.wait_request()
+            received = self.wait_reply()
             for req in requests:
                 xseg_req = req.req
                 if addressof(received.contents) == \
