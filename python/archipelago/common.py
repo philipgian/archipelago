@@ -207,7 +207,7 @@ class Peer(object):
     def __is_running(self, pid):
         name = self.executable
         for p in psutil.process_iter():
-            if p.name[0:len(name)] == name and pid == p.pid:
+            if p.name == name[0:15] and pid == p.pid:
                 return True
 
         return False
