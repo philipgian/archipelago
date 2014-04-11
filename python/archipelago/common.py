@@ -913,60 +913,17 @@ class Xseg_ctx(object):
             else:
                 xseg_signal(self.ctx, p)
 
-
-class Request(object):
+class XsegRequest(object):
     xseg_ctx = None
     req = None
 
-    def __init__(self, xseg_ctx, dst_portno, target, datalen=0, size=0, op=None,
-                 data=None, flags=0, offset=0):
-        if not target:
-            raise Error("No target")
-        targetlen = len(target)
-        if not datalen and data:
-            if isinstance(data, basestring):
-                datalen = len(data)
-            else:
-                datalen = sizeof(data)
-
-        ctx = xseg_ctx.ctx
-        if not ctx:
+    def __init__(self, xseg, req):
+        if not xseg.ctx:
             raise Error("No context")
-        req = xseg_get_request(ctx, xseg_ctx.portno, dst_portno, X_ALLOC)
         if not req:
-            raise Error("Cannot get request")
-        r = xseg_prep_request(ctx, req, targetlen, datalen)
-        if r < 0:
-            xseg_put_request(ctx, req, xseg_ctx.portno)
-            raise Error("Cannot prepare request")
+            raise Error("No request")
+        self.xseg_ctx = xseg
         self.req = req
-        self.xseg_ctx = xseg_ctx
-
-        if not self.set_target(target):
-            self.put()
-            raise Error("Cannot set target")
-
-        if (data):
-            if not self.set_data(data):
-                self.put()
-                raise Error("Cannot set data")
-
-        self.set_size(size)
-        self.set_op(op)
-        self.set_flags(flags)
-        self.set_offset(offset)
-
-        return
-
-    def __enter__(self):
-        if not self.req:
-            raise Error("xseg request not set")
-        return self
-
-    def __exit__(self, type_, value, traceback):
-        self.put()
-        self.req = None
-        return False
 
     def put(self, force=False):
         if not self.req:
@@ -1058,6 +1015,140 @@ class Request(object):
             return cast(xseg_get_data_nonstatic(self.xseg_ctx.ctx, self.req),
                         c_void_p)
 
+    def set_fail(self):
+        self.req.contents.state &= ~XS_SERVED
+        self.req.contents.state |= XS_FAILED
+
+    def set_served(self):
+        self.req.contents.state &= ~XS_FAILED
+        self.req.contents.state |= XS_SERVED
+
+    def success(self):
+        if not bool(self.req.contents.state & XS_SERVED) and not \
+            bool(self.req.contents.state & XS_FAILED):
+            raise Error("Request not completed, nor Failed")
+        return bool((self.req.contents.state & XS_SERVED) and not \
+                   (self.req.contents.state & XS_FAILED))
+
+
+class Reply(XsegRequest):
+
+    def __init__(self, xreq, op=None, datalen=0, data=0, serviced=0,
+            failed=False):
+        super(Reply, self).__init__(xreq.xseg_ctx, xreq.req)
+
+        if op is not None and xreq.get_op() != op:
+            raise Error("Op mismatch")
+
+        target = self.get_target()
+        targetlen = len(target)
+
+        r = xseg_resize_request(self.xseg_ctx.ctx, self.req, targetlen, datalen)
+        if r < 0:
+            raise Error("Cannot resize request")
+
+        self.set_target(target)
+
+        if data:
+            self.set_data(data)
+
+        self.set_serviced = serviced
+
+        if failed:
+            self.set_fail()
+        else:
+            self.set_served()
+
+
+    def reply(self):
+        """Reply the associated xseg_request"""
+        p = xseg_respond(self.xseg_ctx.ctx, self.req, self.xseg_ctx.portno,
+                        X_ALLOC)
+        if p == NoPort:
+            raise Exception
+        xseg_signal(self.xseg_ctx.ctx, p)
+
+    @classmethod
+    def get_failed_reply(cls, xreq):
+        return cls(xreq, failed=True)
+
+    @classmethod
+    def get_read_reply(cls, xreq, serviced=0, data=None):
+        if data is None:
+            data = ""
+        datalen = len(data)
+        return cls(xreq, op=X_READ, serviced=serviced,
+                datalen=datalen, data=data)
+
+    @classmethod
+    def get_write_reply(cls, xreq, serviced):
+        return cls(xreq, op=X_WRITE, serviced=serviced)
+
+    @classmethod
+    def get_acquire_reply(cls, xreq):
+        return cls(xreq, op=X_ACQUIRE)
+
+    @classmethod
+    def get_release_reply(cls, xreq):
+        return cls(xreq, op=X_RELEASE)
+
+    @classmethod
+    def get_copy_reply(cls, xreq, serviced):
+        return cls(xreq, op=X_COPY, serviced=serviced)
+
+class Request(XsegRequest):
+
+    def __init__(self, xseg_ctx, dst_portno, target, datalen=0, size=0, op=None,
+                 data=None, flags=0, offset=0):
+
+        if not target:
+            raise Error("No target")
+        targetlen = len(target)
+        if not datalen and data:
+            if isinstance(data, basestring):
+                datalen = len(data)
+            else:
+                datalen = sizeof(data)
+
+        ctx = xseg_ctx.ctx
+        if not ctx:
+            raise Error("No context")
+        req = xseg_get_request(ctx, xseg_ctx.portno, dst_portno, X_ALLOC)
+        if not req:
+            raise Error("Cannot get request")
+        r = xseg_prep_request(ctx, req, targetlen, datalen)
+        if r < 0:
+            xseg_put_request(ctx, req, xseg_ctx.portno)
+            raise Error("Cannot prepare request")
+
+        super(Request, self).__init__(xseg_ctx, req)
+
+        if not self.set_target(target):
+            self.put()
+            raise Error("Cannot set target")
+
+        if (data):
+            if not self.set_data(data):
+                self.put()
+                raise Error("Cannot set data")
+
+        self.set_size(size)
+        self.set_op(op)
+        self.set_flags(flags)
+        self.set_offset(offset)
+
+        return
+
+    def __enter__(self):
+        if not self.req:
+            raise Error("xseg request not set")
+        return self
+
+    def __exit__(self, type_, value, traceback):
+        self.put()
+        self.req = None
+        return False
+
     def submit(self):
         """Submit the associated xseg_request"""
         p = xseg_submit(self.xseg_ctx.ctx, self.req, self.xseg_ctx.portno,
@@ -1070,13 +1161,6 @@ class Request(object):
         """Wait until the associated xseg_request is responded, discarding any
         other requests that may be received in the meantime"""
         self.xseg_ctx.wait_requests([self])
-
-    def success(self):
-        if not bool(self.req.contents.state & XS_SERVED) and not \
-            bool(self.req.contents.state & XS_FAILED):
-            raise Error("Request not completed, nor Failed")
-        return bool((self.req.contents.state & XS_SERVED) and not \
-                   (self.req.contents.state & XS_FAILED))
 
     @classmethod
     def get_write_request(cls, xseg, dst, target, data=None, offset=0,
