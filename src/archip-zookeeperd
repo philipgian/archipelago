@@ -1,0 +1,302 @@
+#!/usr/bin/env python
+
+from gevent import monkey
+monkey.patch_all()
+
+import os
+import gevent
+import logging
+from kazoo.client import KazooClient
+from kazoo.retry import KazooRetry
+from kazoo.handlers.gevent import SequentialGeventHandler
+from kazoo.protocol.states import EventType
+from kazoo.exceptions import (
+        NoNodeError, BadVersionError, SessionExpiredError,
+        ConnectionClosedError
+        )
+from socket import getfqdn
+
+from archipelago.peer import (
+        Peer, register_main, launch_peer, get_peer_parser
+        )
+
+from xseg.xseg_api import (
+        X_ACQUIRE, X_RELEASE, XF_NOSYNC, XF_FORCE
+        )
+
+from archipelago.common import Reply
+
+logger = logging.getLogger("peer")
+ZKPATH = '/archipelago'
+
+def version_check(func):
+    """decorator"""
+    def wrapper(*args, **kwargs):
+        """fooo"""
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except BadVersionError:
+                logger.info("Badversion")
+
+    return wrapper
+
+def zk_defer(func):
+    """decorator"""
+    def wrapper(self, request):
+        """fooo"""
+        try:
+            return func(self, request)
+        except (SessionExpiredError, ConnectionClosedError):
+            self.queue.append(request)
+
+    return wrapper
+
+class LockTarget(object):
+    """Locker class"""
+
+    targetpath = None
+    lockmgr = None
+    zkclient = None
+    lockers = None
+    version = None
+    cond = None
+
+    def __init__(self, lockmgr, target):
+        self.targetpath = os.path.join(lockmgr.lockpath, target)
+        self.lockmgr = lockmgr
+        self.zkclient = lockmgr.zkclient
+        self.cond = gevent.event.Event()
+        self.cond.clear()
+
+    def _get_lockers(self, block=False):
+        """foo"""
+        self.zkclient.ensure_path(self.targetpath)
+        watch = None
+        if block:
+            watch = self.watch_cb
+        znode = self.zkclient.get(self.targetpath, watch=watch)
+        logger.debug("Got znode data:i %s" % znode[0].rstrip())
+        data = znode[0].rstrip()
+        if len(data) > 0:
+            data = data.split(',')
+        else:
+            data = []
+        self.version = znode[1].version
+        logger.debug("Got data: %s %d" % (data, len(data)))
+        if len(data) > 0:
+            self.lockers = [x.split(':') for x in data]
+        else:
+            self.lockers = []
+        logger.debug("Got lockers: %s" % self.lockers)
+
+    def get_lockers(self, block=False):
+        kr = KazooRetry(max_tries=None, ignore_expire=True)
+        return kr(self._get_lockers, block)
+
+    def _set_lockers(self):
+        """fooo"""
+        self.zkclient.ensure_path(self.targetpath)
+        if len(self.lockers) > 0:
+            lockers = [l[0] + ':' + l[1] for l in self.lockers]
+            data = ','.join(lockers)
+        else:
+            data = ""
+        logger.debug("Setting: %s %s" % (self.lockers, data))
+        self.zkclient.set(self.targetpath, data, version=self.version)
+        znode = self.zkclient.get(self.targetpath)
+        logger.debug("Set: %s" % znode[0].rstrip())
+
+    def set_lockers(self):
+        kr = KazooRetry(max_tries=None, ignore_expire=True)
+        return kr(self._set_lockers)
+
+    def isLocked(self, locker=None):
+        """asd"""
+        if locker is None:
+            locker = self.lockmgr.lockerid
+
+        for l in self.lockers:
+            if l[0] == locker:
+                return l[1]
+
+        return None
+
+    def remove_locker(self, locker=None):
+#maybe remove znode
+        """fasd"""
+        if locker is None:
+            locker = self.lockmgr.lockerid
+
+        logger.debug("Removing %s %s" % (self.lockers, locker))
+        for l in self.lockers:
+            if l[0] == locker:
+                i = self.lockers.index(l)
+                del self.lockers[i]
+                return True
+
+        return False
+
+    def watch_cb(self, event):
+        if not event is None and event.type != EventType.CHANGED:
+            return
+        self.cond.set()
+
+    def conflicts(self, mode):
+        """fooo"""
+        for l in self.lockers:
+            if self.lockmgr.conflicts(l[1], mode):
+                return True
+
+        return False
+
+    @version_check
+    def lock(self, mode='ex', block=False):
+        """lock"""
+        self.cond.clear()
+        self.get_lockers(block)
+        m = self.isLocked()
+        if m is not None:
+            if m == mode:
+                return True
+            else:
+                return False
+
+        if self.conflicts(mode):
+            if block:
+                self.cond.wait()
+                raise BadVersionError
+            else:
+                return False
+
+        self.lockers.append([self.lockmgr.lockerid, mode])
+        self.set_lockers()
+
+        return True
+
+    @version_check
+    def unlock(self, locker=None):
+        """lock"""
+        self.get_lockers()
+
+        if not self.remove_locker(locker):
+            return False
+
+        self.set_lockers()
+
+        return True
+
+    @version_check
+    def remove_all(self):
+        """lock"""
+        self.get_lockers()
+
+        self.lockers = []
+
+        self.set_lockers()
+
+        return True
+
+
+
+class LockManager(object):
+    """LockManager class"""
+
+    lockerid = None
+    zkclient = None
+    lockpath = os.path.join(ZKPATH, 'lock')
+
+    lockConflicts = {
+            'nl': [],
+            'cr': ['ex'],
+            'cw': ['pr', 'pw', 'ex'],
+            'pr': ['cw', 'pw', 'ex'],
+            'pw': ['cw', 'pr', 'pw', 'ex'],
+            'ex': ['cr', 'cw', 'pr', 'pw', 'ex']
+    }
+
+
+    def __init__(self, zkclient):
+        self.zkclient = zkclient
+        self.lockerid = getfqdn()
+        #self.lockerid = str(os.getpid())
+
+    def conflicts(self, mode1, mode2):
+        """conflicts"""
+        return mode2 in self.lockConflicts[mode1]
+
+    def lock(self, target, block=False, mode='ex'):
+        """Lock"""
+        return LockTarget(self, target).lock(mode=mode, block=block)
+
+    def unlock(self, target):
+        """Unlock"""
+        return LockTarget(self, target).unlock()
+
+    def breaklock(self, target, locker):
+        """Break lock"""
+        return LockTarget(self, target).unlock(locker)
+
+    def remove_all(self, target):
+        """Remove all locks"""
+        return LockTarget(self, target).remove_all()
+
+
+
+class ZookeeperPeer(Peer):
+    zk = None
+    lockmgr = None
+
+    def __init__(self, zookeeper=None, **kwargs):
+        self.ops = {
+                X_ACQUIRE: self.dispatch_acquire,
+                X_RELEASE: self.dispatch_release
+            }
+        self.client = KazooClient(hosts=zookeeper,
+                handler=SequentialGeventHandler())
+        self.client.start()
+        self.lockmgr = LockManager(self.client)
+        super(ZookeeperPeer, self).__init__(**kwargs)
+
+    def dispatch_acquire(self, request):
+        block = not bool(request.get_flags() & XF_NOSYNC)
+
+        locked = self.lockmgr.lock(request.get_target(), block=block)
+
+        if locked:
+            reply = Reply.get_acquire_reply(request)
+        else:
+            reply = Reply.get_failed_reply(request)
+
+        reply.reply()
+
+    def dispatch_release(self, request):
+        force = bool(request.get_flags() & XF_FORCE)
+
+        if force:
+            unlocked = self.lockmgr.remove_all(request.get_target())
+        else:
+            unlocked = self.lockmgr.unlock(request.get_target())
+
+        if unlocked:
+            reply = Reply.get_release_reply(request)
+        else:
+            reply = Reply.get_failed_reply(request)
+
+        reply.reply()
+
+def peer_main(kwargs):
+    peer = ZookeeperPeer(**kwargs)
+    peer.launch_loop()
+
+
+if __name__ == '__main__':
+
+    parser = get_peer_parser()
+    parser.add_argument('--zookeeper', dest='zookeeper', type=str, nargs='?',
+            help='zookeeper address', required=True)
+    args = parser.parse_args()
+    kwargs = vars(args)
+
+    register_main(peer_main)
+    launch_peer(kwargs)

@@ -37,3 +37,4 @@ project (archipelago_conf)
 
 INSTALL(FILES archipelago.conf DESTINATION /etc/archipelago)
 INSTALL(FILES archipelago.conf.rados_example DESTINATION /etc/archipelago)
+INSTALL(FILES archipelago.conf.zookeeper_example DESTINATION /etc/archipelago)

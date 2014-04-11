@@ -89,3 +89,5 @@ set_target_properties(archip-mapperd
 
 INSTALL_TARGETS(/bin archip-filed archip-radosd archip-vlmcd archip-mapperd
 	archip-bench archip-dummy archip-benchfd)
+
+install(PROGRAMS archip-zookeeperd DESTINATION /usr/bin)

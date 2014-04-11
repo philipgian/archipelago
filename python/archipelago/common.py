@@ -58,7 +58,8 @@ import ConfigParser
 random.seed()
 hostname = socket.gethostname()
 
-valid_role_types = ['file_blocker', 'rados_blocker', 'mapperd', 'vlmcd']
+valid_role_types = ['file_blocker', 'rados_blocker', 'mapperd', 'vlmcd',
+    'zookeeperd']
 valid_segment_types = ['posix']
 
 peers = dict()
@@ -84,6 +85,7 @@ FILE_BLOCKER = 'archip-filed'
 RADOS_BLOCKER = 'archip-radosd'
 MAPPER = 'archip-mapperd'
 VLMC = 'archip-vlmcd'
+ZOOKEEPER= 'archip-zookeeperd'
 
 def is_power2(x):
     return bool(x != 0 and (x & (x-1)) == 0)
@@ -398,6 +400,24 @@ class Vlmcd(Peer):
             self.cli_opts.append("-mp")
             self.cli_opts.append(str(self.mapper_port))
 
+class Zookeeperd(Peer):
+    def __init__(self, zookeeper=None, **kwargs):
+        self.executable = ZOOKEEPER
+        if zookeeper is None:
+            raise Error("zookeeper must be provided for %s" % role)
+        self.zookeeper = zookeeper
+
+        super(Zookeeperd, self).__init__(**kwargs)
+
+        if self.cli_opts is None:
+            self.cli_opts = []
+        self.set_zookeeperd_cli_opts()
+
+    def set_zookeeperd_cli_opts(self):
+        if self.zookeeper is not None:
+            self.cli_opts.append("--zookeeper")
+            self.cli_opts.append(str(self.zookeeper))
+
 
 config = {
     'CEPH_CONF_FILE': '/etc/ceph/ceph.conf',
@@ -588,6 +608,9 @@ def check_conf():
         elif role_type == 'vlmcd':
             peers[role] = Vlmcd(role=role, spec=segment.get_spec(),
                                 **role_config)
+        elif role_type == 'zookeeperd':
+            peers[role] = Zookeeperd(role=role, spec=segment.get_spec(),
+                                **role_config)
         else:
             raise Error("No valid peer type: %s" % role_type)
         validatePortRange(peers[role].portno_start, peers[role].portno_end,
@@ -705,6 +728,8 @@ def createDict(cfg, section):
     elif t == 'vlmcd':
         sec_dic['blocker_port'] = cfg.getint(section, 'blocker_port')
         sec_dic['mapper_port'] = cfg.getint(section, 'mapper_port')
+    elif t == 'zookeeperd':
+        sec_dic['zookeeper'] = cfg.get(section, 'zookeeper')
 
     return sec_dic
 
