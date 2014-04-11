@@ -221,7 +221,7 @@ struct xseg_request * __close_map(struct peer_req *pr, struct map *map)
 
 	XSEGLOG2(&lc, I, "Closing map %s", map->volume);
 
-	req = get_request(pr, mapper->mbportno, map->volume, map->volumelen, 0);
+	req = get_request(pr, mapper->lportno, map->volume, map->volumelen, 0);
 	if (!req){
 		XSEGLOG2(&lc, E, "Cannot get request for map %s",
 				map->volume);
@@ -281,7 +281,7 @@ struct xseg_request * __open_map(struct peer_req *pr, struct map *map,
 
 	XSEGLOG2(&lc, I, "Opening map %s", map->volume);
 
-	req = get_request(pr, mapper->mbportno, map->volume, map->volumelen, 0);
+	req = get_request(pr, mapper->lportno, map->volume, map->volumelen, 0);
 	if (!req){
 		XSEGLOG2(&lc, E, "Cannot get request for map %s",
 				map->volume);

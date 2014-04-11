@@ -164,6 +164,7 @@ struct map {
 struct mapperd {
 	xport bportno;		/* blocker that accesses data */
 	xport mbportno;		/* blocker that accesses maps */
+	xport lportno;		/* peer that handles locks */
 	xhash_t *hashmaps; // hash_function(target) --> struct map
 };
 

@@ -342,7 +342,8 @@ class Filed(MTpeer):
 
 
 class Mapperd(Peer):
-    def __init__(self, blockerm_port=None, blockerb_port=None, **kwargs):
+    def __init__(self, blockerm_port=None, blockerb_port=None, locker_port=None,
+            **kwargs):
         self.executable = MAPPER
         if blockerm_port is None:
             raise Error("blockerm_port must be provied for %s" % role)
@@ -351,6 +352,10 @@ class Mapperd(Peer):
         if blockerb_port is None:
             raise Error("blockerb_port must be provied for %s" % role)
         self.blockerb_port = blockerb_port
+
+        if locker_port is None:
+            raise Error("locker_port must be provied for %s" % role)
+        self.locker_port = locker_port
         super(Mapperd, self).__init__(**kwargs)
 
         if self.cli_opts is None:
@@ -364,6 +369,9 @@ class Mapperd(Peer):
         if self.blockerb_port is not None:
             self.cli_opts.append("-bp")
             self.cli_opts.append(str(self.blockerb_port))
+        if self.locker_port is not None:
+            self.cli_opts.append("-lp")
+            self.cli_opts.append(str(self.locker_port))
 
 
 class Vlmcd(Peer):
@@ -693,6 +701,7 @@ def createDict(cfg, section):
     elif t == 'mapperd':
         sec_dic['blockerb_port'] = cfg.getint(section, 'blockerb_port')
         sec_dic['blockerm_port'] = cfg.getint(section, 'blockerm_port')
+        sec_dic['locker_port'] = cfg.getint(section, 'locker_port')
     elif t == 'vlmcd':
         sec_dic['blocker_port'] = cfg.getint(section, 'blocker_port')
         sec_dic['mapper_port'] = cfg.getint(section, 'mapper_port')

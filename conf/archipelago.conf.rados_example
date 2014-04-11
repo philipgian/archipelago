@@ -61,6 +61,7 @@ log_level=3
 nr_ops=512
 blockerb_port=1000
 blockerm_port=1002
+locker_port=1002
 
 [vlmcd]
 type=vlmcd

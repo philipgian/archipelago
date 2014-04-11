@@ -62,6 +62,7 @@ void custom_peer_usage()
 {
 	fprintf(stderr, "Custom peer options: \n"
 			"-bp  : port for block blocker(!)\n"
+			"-lp  : port for locker(!)\n"
 			"-mbp : port for map blocker\n"
 			"\n");
 }
@@ -1534,9 +1535,11 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
 	mapper->bportno = -1;
 	mapper->mbportno = -1;
+	mapper->lportno = -1;
 	BEGIN_READ_ARGS(argc, argv);
 	READ_ARG_ULONG("-bp", mapper->bportno);
 	READ_ARG_ULONG("-mbp", mapper->mbportno);
+	READ_ARG_ULONG("-lp", mapper->lportno);
 	END_READ_ARGS();
 	if (mapper->bportno == -1){
 		XSEGLOG2(&lc, E, "Portno for blocker must be provided");
@@ -1545,6 +1548,11 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 	}
 	if (mapper->mbportno == -1){
 		XSEGLOG2(&lc, E, "Portno for mblocker must be provided");
+		usage(argv[0]);
+		return -1;
+	}
+	if (mapper->lportno == -1){
+		XSEGLOG2(&lc, E, "Portno for locker must be provided");
 		usage(argv[0]);
 		return -1;
 	}

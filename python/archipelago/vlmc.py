@@ -253,8 +253,8 @@ def lock(name, cli=False, **kwargs):
     name = ARCHIP_PREFIX + name
 
     xseg_ctx = Xseg_ctx(get_segment())
-    mbport = peers['blockerm'].portno_start
-    req = Request.get_acquire_request(xseg_ctx, mbport, name)
+    lport = peers['mapperd'].locker_port
+    req = Request.get_acquire_request(xseg_ctx, lport, name)
     req.submit()
     req.wait()
     ret = req.success()
@@ -273,8 +273,8 @@ def unlock(name, force=False, cli=False, **kwargs):
     name = ARCHIP_PREFIX + name
 
     xseg_ctx = Xseg_ctx(get_segment())
-    mbport = peers['blockerm'].portno_start
-    req = Request.get_release_request(xseg_ctx, mbport, name, force=force)
+    lport = peers['mapperd'].locker_port
+    req = Request.get_release_request(xseg_ctx, lport, name, force=force)
     req.submit()
     req.wait()
     ret = req.success()
