@@ -504,6 +504,15 @@ class Segment(object):
 
         return ctx
 
+    @classmethod
+    def fromSpec(cls, spec):
+        spec = spec.split(':')
+        if len(spec) != 6:
+            raise Error("Invalid spec")
+
+        return cls(spec[0], spec[1], int(spec[2]), int(spec[3]), int(spec[4]), 
+                int(spec[5]))
+
 def check_conf():
     port_ranges = []
 
