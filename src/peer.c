@@ -44,8 +44,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #define PEER_TYPE "posixfd"
+#define DEFAULT_LOG_CONFFILE "logging.conf"
+#define DEFAULT_LOGGER "archipelago"
 
 //FIXME this should not be defined here probably
+#define MAX_LOGGER_LEN 128
+#define MAX_LOGCONFFILE_LEN 1024
 #define MAX_SPEC_LEN 128
 #define MAX_PIDFILE_LEN 512
 #define MAX_CPUS_LEN 512
@@ -59,7 +63,7 @@ struct cpu_list {
 struct cpu_list cpu_list;
 volatile unsigned int terminated = 0;
 unsigned int verbose = 0;
-struct log_ctx lc;
+Logger_t *logger;
 #ifdef ST_THREADS
 uint32_t ta = 0;
 #endif
@@ -81,7 +85,7 @@ inline static int wake_up_next_thread(struct peerd *peer)
 
 void signal_handler(int signal)
 {
-//      XSEGLOG2(&lc, I, "Caught signal. Terminating gracefully");
+//      flogger_info(logger, "Caught signal. Terminating gracefully");
     terminated = 1;
 #ifdef MT
     wake_up_next_thread(global_peer);
@@ -107,8 +111,6 @@ void segv_handler(int signal)
 
 void renew_logfile(int signal)
 {
-//      XSEGLOG2(&lc, I, "Caught signal. Renewing logfile");
-    renew_logctx(&lc, NULL, verbose, NULL, REOPEN_FILE);
 }
 
 static int setup_signals(struct peerd *peer)
@@ -323,8 +325,8 @@ void fail(struct peerd *peer, struct peer_req *pr)
     struct xseg_request *req = pr->req;
     uint32_t p;
     if (req) {
-        XSEGLOG2(&lc, D, "failing req %u",
-                 (unsigned int) (pr - peer->peer_reqs));
+        flogger_debug(logger, "failing req %u",
+                      (unsigned int) (pr - peer->peer_reqs));
         req->state |= XS_FAILED;
         //xseg_set_req_data(peer->xseg, pr->req, NULL);
         p = xseg_respond(peer->xseg, req, pr->portno, X_ALLOC);
@@ -364,7 +366,7 @@ static void handle_accepted(struct peerd *peer, struct peer_req *pr,
 {
     struct xseg_request *xreq = pr->req;
     //assert xreq == req;
-    XSEGLOG2(&lc, D, "Handle accepted");
+    flogger_debug(logger, "Handle accepted");
     xreq->serviced = 0;
     //xreq->state = XS_ACCEPTED;
     pr->retval = 0;
@@ -376,7 +378,7 @@ static void handle_received(struct peerd *peer, struct peer_req *pr,
 {
     //struct xseg_request *req = pr->req;
     //assert req->state != XS_ACCEPTED;
-    XSEGLOG2(&lc, D, "Handle received \n");
+    flogger_debug(logger, "Handle received \n");
     dispatch(peer, pr, req, dispatch_receive);
 
 }
@@ -397,8 +399,8 @@ int submit_peer_req(struct peerd *peer, struct peer_req *pr)
     struct xseg_request *req = pr->req;
     // assert req->portno == peer->portno ?
     //TODO small function with error checking
-    XSEGLOG2(&lc, D, "submitting peer req %u\n",
-             (unsigned int) (pr - peer->peer_reqs));
+    flogger_debug(logger, "submitting peer req %u\n",
+                  (unsigned int) (pr - peer->peer_reqs));
     ret = xseg_set_req_data(peer->xseg, req, (void *) (pr));
     if (ret < 0) {
         return -1;
@@ -457,12 +459,12 @@ int check_ports(struct peerd *peer)
         if (received) {
             r = xseg_get_req_data(xseg, received, (void **) &pr);
             if (r < 0 || !pr) {
-                XSEGLOG2(&lc, W, "Received request with no pr data\n");
+                flogger_warn(logger, "Received request with no pr data\n");
                 xport p =
                     xseg_respond(peer->xseg, received, peer->portno_start,
                                  X_ALLOC);
                 if (p == NoPort) {
-                    XSEGLOG2(&lc, W, "Could not respond stale request");
+                    flogger_warn(logger, "Could not respond stale request");
                     xseg_put_request(xseg, received, portno_start);
                     continue;
                 } else {
@@ -492,9 +494,9 @@ static void *thread_loop(void *arg)
     uint64_t loops;
     uint64_t threshold = 1000 / (1 + portno_end - portno_start);
 
-    XSEGLOG2(&lc, D, "thread %u\n", (unsigned int) (t - peer->thread));
-    XSEGLOG2(&lc, I, "Thread %u has tid %u.\n",
-             (unsigned int) (t - peer->thread), pid);
+    flogger_debug(logger, "thread %u", (unsigned int) (t - peer->thread));
+    flogger_info(logger, "Thread %u has tid %u.",
+                 (unsigned int) (t - peer->thread), pid);
     for (; !(isTerminate() && xq_count(&peer->free_reqs) == peer->nr_ops);) {
         for (loops = threshold; loops > 0; loops--) {
             if (loops == 1) {
@@ -504,12 +506,12 @@ static void *thread_loop(void *arg)
                 loops = threshold;
             }
         }
-        XSEGLOG2(&lc, I, "Thread %u goes to sleep\n",
-                 (unsigned int) (t - peer->thread));
+        flogger_info(logger, "Thread %u goes to sleep",
+                     (unsigned int) (t - peer->thread));
         xseg_wait_signal(xseg, peer->sd, 10000000UL);
         xseg_cancel_wait(xseg, peer->portno_start);
-        XSEGLOG2(&lc, I, "Thread %u woke up\n",
-                 (unsigned int) (t - peer->thread));
+        flogger_info(logger, "Thread %u woke up",
+                     (unsigned int) (t - peer->thread));
     }
     wake_up_next_thread(peer);
     custom_peer_finalize(peer);
@@ -588,18 +590,18 @@ int defer_request(struct peerd *peer, struct peer_req *pr)
     int r;
     xport p;
     if (!canDefer(peer)) {
-        XSEGLOG2(&lc, E, "Peer cannot defer requests");
+        flogger_error(logger, "Peer cannot defer requests");
         return -1;
     }
     p = xseg_forward(peer->xseg, pr->req, peer->defer_portno, pr->portno,
                      X_ALLOC);
     if (p == NoPort) {
-        XSEGLOG2(&lc, E, "Cannot defer request %lx", pr->req);
+        flogger_error(logger, "Cannot defer request %lx", pr->req);
         return -1;
     }
     r = xseg_signal(peer->xseg, p);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Cannot signal port %lu", p);
+        flogger_warn(logger, "Cannot signal port %lu", p);
     }
     free_peer_req(peer, pr);
     return 0;
@@ -628,7 +630,7 @@ static int generic_peerd_loop(void *arg)
     threshold += 1;
     uint64_t loops;
 
-    XSEGLOG2(&lc, I, "%s has tid %u.\n", id, pid);
+    flogger_info(logger, "%s has tid %u.", id, pid);
     //for (;!(isTerminate() && xq_count(&peer->free_reqs) == peer->nr_ops);) {
     for (; !(isTerminate() && all_peer_reqs_free(peer));) {
         //Heart of peerd_loop. This loop is common for everyone.
@@ -648,10 +650,10 @@ static int generic_peerd_loop(void *arg)
             continue;
         }
 #endif
-        XSEGLOG2(&lc, I, "%s goes to sleep\n", id);
+        flogger_info(logger, "%s goes to sleep", id);
         xseg_wait_signal(xseg, peer->sd, 10000000UL);
         xseg_cancel_wait(xseg, peer->portno_start);
-        XSEGLOG2(&lc, I, "%s woke up\n", id);
+        flogger_info(logger, "%s woke up", id);
     }
     return 0;
 }
@@ -780,7 +782,7 @@ static struct peerd *peerd_init(uint32_t nr_ops, char *spec, long portno_start,
     for (p = peer->portno_start; p <= peer->portno_end; p++) {
         port = xseg_bind_port(peer->xseg, p, peer->sd);
         if (!port) {
-            printf("cannot bind to port %u\n", (unsigned int) p);
+            printf("cannot bind to port %u", (unsigned int) p);
             return NULL;
         }
         if (p == peer->portno_start) {
@@ -788,11 +790,9 @@ static struct peerd *peerd_init(uint32_t nr_ops, char *spec, long portno_start,
         }
     }
 
-    printf("Peer on ports  %u-%u\n", peer->portno_start, peer->portno_end);
-
     r = xseg_init_local_signal(peer->xseg, peer->portno_start);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not initialize local signals");
+        flogger_error(logger, "Could not initialize local signals");
         return NULL;
     }
 
@@ -901,7 +901,7 @@ void usage(char *argv0)
             "    -p        | NoPort  | Portno to bind\n"
             "    -n        | 16      | Number of ops\n"
             "    -v        | 0       | Verbosity level\n"
-            "    -l        | None    | Logfile \n"
+            "    -l        | None    | Log config file \n"
             "    -d        | No      | Daemonize \n"
             "    --pidfile | None    | Pidfile \n"
             "    -uid      | None    | Set real EUID \n"
@@ -935,13 +935,15 @@ int main(int argc, char *argv[])
     mode_t peer_umask = PEER_DEFAULT_UMASK;
 
     char spec[MAX_SPEC_LEN + 1];
-    char logfile[MAX_LOGFILE_LEN + 1];
+    char log_conffile[MAX_LOGCONFFILE_LEN + 1];
+    char logger_instance[MAX_LOGGER_LEN + 1];
     char pidfile[MAX_PIDFILE_LEN + 1];
     char cpus[MAX_CPUS_LEN + 1];
 
     char *username = NULL;
 
-    logfile[0] = '\0';
+    log_conffile[0] = '\0';
+    logger_instance[0] = '\0';
     pidfile[0] = '\0';
     spec[0] = '\0';
     cpus[0] = '\0';
@@ -963,7 +965,8 @@ int main(int argc, char *argv[])
     READ_ARG_ULONG("-t", nr_threads);
 #endif
     READ_ARG_ULONG("-dp", defer_portno);
-    READ_ARG_STRING("-l", logfile, MAX_LOGFILE_LEN);
+    READ_ARG_STRING("-l", log_conffile, MAX_LOGCONFFILE_LEN);
+    READ_ARG_STRING("--logger", logger_instance, MAX_LOGGER_LEN);
     READ_ARG_BOOL("-d", daemonize);
     READ_ARG_BOOL("-h", help);
     READ_ARG_BOOL("--help", help);
@@ -982,7 +985,7 @@ int main(int argc, char *argv[])
         struct group *gr;
         gr = getgrgid(gid);
         if (!gr) {
-            XSEGLOG2(&lc, E, "Group %d not found", gid);
+            flogger_error(logger, "Group %d not found", gid);
             return -1;
         }
     }
@@ -991,7 +994,7 @@ int main(int argc, char *argv[])
         struct passwd *pw;
         pw = getpwuid(uid);
         if (!pw) {
-            XSEGLOG2(&lc, E, "User %d not found", uid);
+            flogger_error(logger, "User %d not found", uid);
             return -1;
         }
         username = pw->pw_name;
@@ -1004,20 +1007,20 @@ int main(int argc, char *argv[])
     cur_gid = getegid();
 
     if (gid != -1 && cur_gid != gid && setregid(gid, gid)) {
-        XSEGLOG2(&lc, E, "Could not set gid to %d", gid);
+        flogger_error(logger, "Could not set gid to %d", gid);
         return -1;
     }
 
     if (uid != -1) {
         if ((cur_gid != gid || cur_uid != uid)
             && initgroups(username, gid)) {
-            XSEGLOG2(&lc, E, "Could not initgroups for user %s, "
-                     "gid %d", username, gid);
+            flogger_error(logger, "Could not initgroups for user %s, "
+                          "gid %d", username, gid);
             return -1;
         }
 
         if (cur_uid != uid && setreuid(uid, uid)) {
-            XSEGLOG2(&lc, E, "Failed to set uid %d", uid);
+            flogger_error(logger, "Failed to set uid %d", uid);
         }
     }
 
@@ -1025,21 +1028,30 @@ int main(int argc, char *argv[])
     peer_umask &= 0777;
     umask(peer_umask);
 
-    r = init_logctx(&lc, argv[0], debug_level, logfile,
-                    REDIRECT_STDOUT | REDIRECT_STDERR);
-    if (r < 0) {
-        XSEGLOG("Cannot initialize logging to logfile");
+    if (log_conffile[0] == '\0') {
+        strcpy(log_conffile, DEFAULT_LOG_CONFFILE);
+    }
+
+    if (logger_instance[0] == '\0') {
+        strcpy(logger_instance, DEFAULT_LOGGER);
+    }
+
+    logger = logger_new(log_conffile, logger_instance);
+    if (!logger) {
+        XSEGLOG("Cannot initialize logger");
         return -1;
     }
-    XSEGLOG2(&lc, D, "Main thread has tid %ld.\n", syscall(SYS_gettid));
+
+    flogger_debug(logger, "Main thread has tid %ld.\n", syscall(SYS_gettid));
 
     if (pidfile[0]) {
         pid_fd = pidfile_open(pidfile, &old_pid);
         if (pid_fd < 0) {
             if (old_pid) {
-                XSEGLOG2(&lc, E, "Daemon already running, pid: %d.", old_pid);
+                flogger_error(logger, "Daemon already running, pid: %d.",
+                              old_pid);
             } else {
-                XSEGLOG2(&lc, E, "Cannot open or create pidfile");
+                flogger_error(logger, "Cannot open or create pidfile");
             }
             return -1;
         }
@@ -1047,10 +1059,10 @@ int main(int argc, char *argv[])
 
     if (daemonize) {
         if (close(STDIN_FILENO)) {
-            XSEGLOG2(&lc, W, "Could not close stdin");
+            flogger_warn(logger, "Could not close stdin");
         }
         if (daemon(0, 1) < 0) {
-            XSEGLOG2(&lc, E, "Cannot daemonize");
+            flogger_error(logger, "Cannot daemonize");
             r = -1;
             goto out;
         }
@@ -1064,19 +1076,19 @@ int main(int argc, char *argv[])
         r = get_cpu_list(cpus, &cpu_list);
 
         if (r < 0) {
-            XSEGLOG2(&lc, E, "--cpus %s: Invalid input", cpus);
+            flogger_error(logger, "--cpus %s: Invalid input", cpus);
             goto out;
         }
 #ifdef MT
         if (nr_threads != cpu_list.len) {
-            XSEGLOG2(&lc, E, "--cpus %s: Number of "
-                     "threads (%d) and CPUs don't match", cpus, nr_threads);
+            flogger_error(logger, "--cpus %s: Number of threads (%d) and CPUs "
+                          "don't match", cpus, nr_threads);
             goto out;
         }
 #else
         if (cpu_list.len != 1) {
-            XSEGLOG2(&lc, E, "--cpus %s: Too many CPUs for a "
-                     "single process", cpus);
+            flogger_error(logger, "--cpus %s: Too many CPUs for a "
+                          "single process", cpus);
             goto out;
         }
 #endif
@@ -1089,8 +1101,8 @@ int main(int argc, char *argv[])
         portno_end = portno;
     }
     if (portno_start == -1 || portno_end == -1) {
-        XSEGLOG2(&lc, E,
-                 "Portno or {portno_start, portno_end} must be supplied");
+        flogger_error(logger,
+                      "Portno or {portno_start, portno_end} must be supplied");
         usage(argv[0]);
         r = -1;
         goto out;

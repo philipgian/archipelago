@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <xseg/xseg.h>
 #include <string.h>
+#include <logger.h>
 
 #ifdef ST_THREADS
 #include <st.h>
@@ -147,7 +148,7 @@ static inline struct peerd *__get_peerd(void *custom_peerd)
 /* decration of "common" variables */
 extern unsigned int verbose;
 extern volatile unsigned int terminated;
-extern struct log_ctx lc;
+extern Logger_t *logger;
 #ifdef ST_THREADS
 extern uint32_t ta;
 #endif

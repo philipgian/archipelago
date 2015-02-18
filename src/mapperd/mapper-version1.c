@@ -74,7 +74,7 @@ struct xseg_request *prepare_write_object_v1(struct peer_req *pr,
     req = get_request(pr, mapper->mbportno, map->volume, map->volumelen,
                       v1_objectsize_in_map);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request for map %s", map->volume);
+        flogger_error(logger, "Cannot get request for map %s", map->volume);
         return NULL;
     }
 
@@ -134,7 +134,7 @@ struct xseg_request *__write_map_data_v1(struct peer_req *pr, struct map *map)
     req = get_request(pr, mapper->mbportno, map->volume, map->volumelen,
                       map->nr_objs * v1_objectsize_in_map);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request for map %s", map->volume);
+        flogger_error(logger, "Cannot get request for map %s", map->volume);
         goto out_err;
     }
 
@@ -154,8 +154,8 @@ struct xseg_request *__write_map_data_v1(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request %p, pr: %p, map: %s",
-                 req, pr, map->volume);
+        flogger_error(logger, "Cannot send request %p, pr: %p, map: %s",
+                      req, pr, map->volume);
         goto out_put;
     }
 
@@ -164,7 +164,7 @@ struct xseg_request *__write_map_data_v1(struct peer_req *pr, struct map *map)
   out_put:
     put_request(pr, req);
   out_err:
-    XSEGLOG2(&lc, E, "Map write for map %s failed.", map->volume);
+    flogger_error(logger, "Map write for map %s failed.", map->volume);
     return NULL;
 }
 
@@ -197,7 +197,7 @@ struct xseg_request *__load_map_data_v1(struct peer_req *pr, struct map *map)
     req = get_request(pr, mapper->mbportno, map->volume, map->volumelen,
                       datalen);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request for map %s", map->volume);
+        flogger_error(logger, "Cannot get request for map %s", map->volume);
         goto out_fail;
     }
 
@@ -207,8 +207,8 @@ struct xseg_request *__load_map_data_v1(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request %p, pr: %p, map: %s",
-                 req, pr, map->volume);
+        flogger_error(logger, "Cannot send request %p, pr: %p, map: %s",
+                      req, pr, map->volume);
         goto out_put;
     }
     return req;
@@ -233,7 +233,7 @@ int load_map_data_v1(struct peer_req *pr, struct map *map)
     wait_on_pr(pr, (!(req->state & XS_FAILED || req->state & XS_SERVED)));
 
     if (req->state & XS_FAILED) {
-        XSEGLOG2(&lc, E, "Map load failed for map %s", map->volume);
+        flogger_error(logger, "Map load failed for map %s", map->volume);
         put_request(pr, req);
         return -1;
     }

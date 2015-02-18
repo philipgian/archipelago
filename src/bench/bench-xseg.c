@@ -268,8 +268,8 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 	 * Check object name parameters *
 	\********************************/
     if (objname[0] && prefix[0]) {
-        XSEGLOG2(&lc, E, "--objname and --prefix options cannot be"
-                 "used together.");
+        flogger_error(logger, "--objname and --prefix options cannot be"
+                      "used together.");
         goto arg_fail;
     }
 
@@ -292,7 +292,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
     /* Only --prefix can exceed bounds since --objname is bounded */
     if (obv->namelen > XSEG_MAX_TARGETLEN) {
-        XSEGLOG2(&lc, E, "--prefix %s: Prefix is too long.", prefix);
+        flogger_error(logger, "--prefix %s: Prefix is too long.", prefix);
         goto arg_fail;
     }
 
@@ -304,23 +304,23 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     //The I/O pattern of these operations can be either sequential (seq) or
     //random (rand)
     if (!op[0]) {
-        XSEGLOG2(&lc, E, "xseg operation needs to be supplied\n");
+        flogger_error(logger, "xseg operation needs to be supplied\n");
         goto arg_fail;
     }
     r = read_op(op);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: -op %s\n", op);
+        flogger_error(logger, "Invalid syntax: -op %s\n", op);
         goto arg_fail;
     }
     prefs->op = r;
 
     if (!pattern[0]) {
-        XSEGLOG2(&lc, E, "I/O pattern needs to be supplied\n");
+        flogger_error(logger, "I/O pattern needs to be supplied\n");
         goto arg_fail;
     }
     r = read_pattern(pattern);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: --pattern %s\n", pattern);
+        flogger_error(logger, "Invalid syntax: --pattern %s\n", pattern);
         goto arg_fail;
     }
     SET_FLAG(PATTERN, prefs->flags, r);
@@ -330,7 +330,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     }
     r = read_verify(verify);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: --verify %s\n", verify);
+        flogger_error(logger, "Invalid syntax: --verify %s\n", verify);
         goto arg_fail;
     }
     SET_FLAG(VERIFY, prefs->flags, r);
@@ -356,7 +356,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
     r = read_insanity(insanity);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: --insanity %s\n", insanity);
+        flogger_error(logger, "Invalid syntax: --insanity %s\n", insanity);
         goto arg_fail;
     }
     SET_FLAG(INSANITY, prefs->flags, r);
@@ -376,10 +376,10 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
     prefs->bs = str2num(block_size);
     if (!prefs->bs) {
-        XSEGLOG2(&lc, E, "Invalid syntax: -bs %s\n", block_size);
+        flogger_error(logger, "Invalid syntax: -bs %s\n", block_size);
         goto arg_fail;
     } else if (prefs->bs % xseg_page_size) {
-        XSEGLOG2(&lc, E, "Misaligned block size: %s\n", block_size);
+        flogger_error(logger, "Misaligned block size: %s\n", block_size);
         goto arg_fail;
     }
     //Object size (os): Defaults to 4M.
@@ -391,23 +391,23 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
     prefs->os = str2num(object_size);
     if (!prefs->os) {
-        XSEGLOG2(&lc, E, "Invalid syntax: -os %s\n", object_size);
+        flogger_error(logger, "Invalid syntax: -os %s\n", object_size);
         goto arg_fail;
     } else if (prefs->os % prefs->bs) {
-        XSEGLOG2(&lc, E, "Misaligned object size: %s\n", object_size);
+        flogger_error(logger, "Misaligned object size: %s\n", object_size);
         goto arg_fail;
     }
     //Total objects (to) or total I/O size (ts).
     //Must have the same format as "block size"
     //They are mutually exclusive
     if (total_objects[0] && total_size[0]) {
-        XSEGLOG2(&lc, E, "Total objects and total size are "
-                 "mutually exclusive\n");
+        flogger_error(logger, "Total objects and total size are "
+                      "mutually exclusive\n");
         goto arg_fail;
     } else if (total_objects[0]) {
         prefs->to = str2num(total_objects);
         if (!prefs->to) {
-            XSEGLOG2(&lc, E, "Invalid syntax: -to %s\n", total_objects);
+            flogger_error(logger, "Invalid syntax: -to %s\n", total_objects);
             goto arg_fail;
         }
         //In this case, the maximum number of requests is the total
@@ -415,23 +415,23 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
         prefs->status->max = prefs->to;
     } else if (total_size[0]) {
         if (prefs->op != X_READ && prefs->op != X_WRITE) {
-            XSEGLOG2(&lc, E, "Total objects must be supplied "
-                     "(required by -op %s)\n", op);
+            flogger_error(logger, "Total objects must be supplied "
+                          "(required by -op %s)\n", op);
             goto arg_fail;
         }
         prefs->ts = str2num(total_size);
         if (!prefs->ts) {
-            XSEGLOG2(&lc, E, "Invalid syntax: -ts %s\n", total_size);
+            flogger_error(logger, "Invalid syntax: -ts %s\n", total_size);
             goto arg_fail;
         } else if (prefs->ts % prefs->bs) {
-            XSEGLOG2(&lc, E, "Misaligned total I/O size: %s\n", total_size);
+            flogger_error(logger, "Misaligned total I/O size: %s\n", total_size);
             goto arg_fail;
         }
         //In this case, the maximum number of requests is the number of
         //blocks we need to cover the total I/O size
         prefs->status->max = prefs->ts / prefs->bs;
     } else if (!objname[0]) {
-        XSEGLOG2(&lc, E, "Total objects or total size must be supplied\n");
+        flogger_error(logger, "Total objects or total size must be supplied\n");
         goto arg_fail;
     }
 
@@ -440,13 +440,13 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
      */
     if (obv->name[0]) {
         if (prefs->to > 1) {
-            XSEGLOG2(&lc, E, "-to %s: Total objects are restricted "
-                     "to 1 due to --objname %s\n", total_objects, objname);
+            flogger_error(logger, "-to %s: Total objects are restricted "
+                          "to 1 due to --objname %s\n", total_objects, objname);
             goto arg_fail;
         } else if (prefs->ts > prefs->os) {
-            XSEGLOG2(&lc, E, "-ts %s: Total size can't be larger "
-                     "than object size (%s) due to "
-                     "--objname %s\n", total_size, object_size, objname);
+            flogger_error(logger, "-ts %s: Total size can't be larger "
+                          "than object size (%s) due to "
+                          "--objname %s\n", total_size, object_size, objname);
             goto arg_fail;
         } else if (prefs->op == X_READ || prefs->op == X_WRITE) {
             prefs->ts = prefs->os;
@@ -465,7 +465,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 	\*************************/
 
     if (dst_port < 0) {
-        XSEGLOG2(&lc, E, "Target port must be supplied\n");
+        flogger_error(logger, "Target port must be supplied\n");
         goto arg_fail;
     }
 
@@ -498,7 +498,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
         srand(time(NULL));
         set_by_hand = 0;
     } else if (validate_seed(prefs, seed)) {
-        XSEGLOG2(&lc, E, "--seed %lu: Seed larger than %lu. Only its "
+        flogger_error(logger, "--seed %lu: Seed larger than %lu. Only its "
                  "first %d digits will be used", seed, seed_max, obv->seedlen);
         goto arg_fail;
     }
@@ -520,7 +520,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
                 free(prefs->lfsr);
                 goto reseed;
             }
-            XSEGLOG2(&lc, E, "LFSR could not be initialized.\n");
+            flogger_error(logger, "LFSR could not be initialized.\n");
             goto lfsr_fail;
         }
     }
@@ -534,10 +534,10 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     if (request_cap[0]) {
         rc = str2num(request_cap);
         if (!rc) {
-            XSEGLOG2(&lc, E, "Invalid syntax: -rc %s\n", request_cap);
+            flogger_error(logger, "Invalid syntax: -rc %s\n", request_cap);
             goto arg_fail;
         } else if (rc > prefs->status->max) {
-            XSEGLOG2(&lc, E, "Request cap exceeds current request total.\n");
+            flogger_error(logger, "Request cap exceeds current request total.\n");
             goto arg_fail;
         }
         prefs->status->max = rc;
@@ -553,7 +553,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     }
     r = read_progress(progress);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: --progress %s\n", progress);
+        flogger_error(logger, "Invalid syntax: --progress %s\n", progress);
         goto arg_fail;
     }
     SET_FLAG(PROGRESS, prefs->flags, r);
@@ -564,8 +564,8 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
      */
     if ((GET_FLAG(PROGRESS, prefs->flags) == PROGRESS_NO) &&
         (pinterval[0] || ptype[0])) {
-        XSEGLOG2(&lc, E, "Cannot define progress interval or progress "
-                 "type without enabling progress report\n");
+        flogger_error(logger, "Cannot define progress interval or progress "
+                      "type without enabling progress report\n");
         goto arg_fail;
     }
 
@@ -576,7 +576,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
         }
         prefs->rep->type = read_progress_type(ptype);
         if (prefs->rep->type < 0) {
-            XSEGLOG2(&lc, E, "Invalid syntax: --ptype %s\n", ptype);
+            flogger_error(logger, "Invalid syntax: --ptype %s\n", ptype);
             goto arg_fail;
         }
         prefs->rep->lines = calculate_report_lines(prefs);
@@ -589,7 +589,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
         }
         prefs->rep->interval = read_interval(prefs, pinterval);
         if (prefs->rep->interval == 0) {
-            XSEGLOG2(&lc, E, "Invalid syntax: --pinterval %s\n", pinterval);
+            flogger_error(logger, "Invalid syntax: --pinterval %s\n", pinterval);
             goto arg_fail;
         }
     }
@@ -600,7 +600,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     }
     r = read_ping(ping);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Invalid syntax: --ping %s\n", ping);
+        flogger_error(logger, "Invalid syntax: --ping %s\n", ping);
         goto arg_fail;
     }
     SET_FLAG(PING, prefs->flags, r);
@@ -610,10 +610,10 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     peer->priv = (void *) prefs;
 
     if (obv->prefixlen) {
-        XSEGLOG2(&lc, I, "Seed is %u, prefix is %s", obv->seed, obv->prefix);
+        flogger_info(logger, "Seed is %u, prefix is %s", obv->seed, obv->prefix);
     } else {
-        XSEGLOG2(&lc, I, "Seed is %u, object name is %s",
-                 obv->seed, obv->name);
+        flogger_info(logger, "Seed is %u, object name is %s",
+                     obv->seed, obv->name);
     }
 
     return 0;
@@ -661,11 +661,11 @@ static int send_request(struct peerd *peer, struct bench *prefs)
 
     //srcport and dstport must already be provided by the user.
     //returns struct xseg_request with basic initializations
-    XSEGLOG2(&lc, D, "Get new request\n");
+    flogger_debug(logger, "Get new request\n");
     timer_start(prefs, prefs->get_tm);
     req = xseg_get_request(xseg, srcport, dstport, X_ALLOC);
     if (!req) {
-        XSEGLOG2(&lc, W, "Cannot get request\n");
+        flogger_warn(logger, "Cannot get request\n");
         return -1;
     }
     timer_stop(prefs, prefs->get_tm, NULL);
@@ -676,11 +676,11 @@ static int send_request(struct peerd *peer, struct bench *prefs)
      * obligatory null termination of snprint(). This extra byte will not be
      * counted as part of the target's name.
      */
-    XSEGLOG2(&lc, D, "Prepare new request\n");
+    flogger_debug(logger, "Prepare new request\n");
     r = xseg_prep_request(xseg, req, obv->namelen + 1, size);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Cannot prepare request! (%lu, %llu)\n",
-                 obv->namelen + 1, (unsigned long long) size);
+        flogger_warn(logger, "Cannot prepare request! (%lu, %llu)\n",
+                     obv->namelen + 1, (unsigned long long) size);
         goto put_xseg_request;
     }
     req->targetlen--;
@@ -688,7 +688,7 @@ static int send_request(struct peerd *peer, struct bench *prefs)
     //Determine what the next target/chunk will be, based on I/O pattern
     new = determine_next(prefs);
     req->op = prefs->op;
-    XSEGLOG2(&lc, I, "Our new request is %lu\n", new);
+    flogger_info(logger, "Our new request is %lu\n", new);
     obv->objnum = __get_object(prefs, new);
     create_target(prefs, req);
 
@@ -696,27 +696,28 @@ static int send_request(struct peerd *peer, struct bench *prefs)
         req->size = size;
         //Calculate the chunk's offset inside the object
         req->offset = calculate_offset(prefs, new);
-        XSEGLOG2(&lc, D, "Offset of request %lu is %lu\n", new, req->offset);
+        flogger_debug(logger, "Offset of request %lu is %lu\n", new,
+                      req->offset);
 
         if (prefs->op == X_WRITE)
             create_chunk(prefs, req, new);
     }
 
-    XSEGLOG2(&lc, D, "Allocate peer request\n");
+    flogger_debug(logger, "Allocate peer request\n");
     pr = alloc_peer_req(peer);
     if (!pr) {
-        XSEGLOG2(&lc, W, "Cannot allocate peer request (%ld remaining)\n",
-                 peer->nr_ops - xq_count(&peer->free_reqs));
+        flogger_warn(logger, "Cannot allocate peer request (%ld remaining)\n",
+                     peer->nr_ops - xq_count(&peer->free_reqs));
         goto put_xseg_request;
     }
     pr->peer = peer;
     pr->portno = srcport;
     pr->req = req;
 
-    //XSEGLOG2(&lc, D, "Set request data\n");
+    //flogger_debug(logger, "Set request data\n");
     r = xseg_set_req_data(xseg, req, pr);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Cannot set request data\n");
+        flogger_warn(logger, "Cannot set request data\n");
         goto put_peer_request;
     }
 
@@ -733,11 +734,11 @@ static int send_request(struct peerd *peer, struct bench *prefs)
         ts->tv_nsec = prefs->rec_tm->start_time.tv_nsec;
     }
     //Submit the request from the source port to the target port
-    XSEGLOG2(&lc, D, "Submit request %lu\n", new);
+    flogger_debug(logger, "Submit request %lu\n", new);
     timer_start(prefs, prefs->sub_tm);
     p = xseg_submit(xseg, req, srcport, X_ALLOC);
     if (p == NoPort) {
-        XSEGLOG2(&lc, W, "Cannot submit request\n");
+        flogger_warn(logger, "Cannot submit request\n");
         goto put_peer_request;
     }
     prefs->status->submitted++;
@@ -747,7 +748,7 @@ static int send_request(struct peerd *peer, struct bench *prefs)
     //IO is possible
     r = xseg_signal(xseg, p);
     //if (r < 0)
-    //      XSEGLOG2(&lc, W, "Cannot signal destination peer (reason %d)\n", r);
+    //      flogger_warn(logger, "Cannot signal destination peer (reason %d)\n", r);
 
     return 0;
 
@@ -755,7 +756,7 @@ static int send_request(struct peerd *peer, struct bench *prefs)
     free_peer_req(peer, pr);
   put_xseg_request:
     if (xseg_put_request(xseg, req, srcport))
-        XSEGLOG2(&lc, W, "Cannot put request\n");
+        flogger_warn(logger, "Cannot put request\n");
     return -1;
 }
 
@@ -769,22 +770,22 @@ static int send_ping_request(struct peerd *peer, struct bench *prefs)
     xport p;
     int r;
 
-    XSEGLOG2(&lc, I, "Sending ping request...");
+    flogger_info(logger, "Sending ping request...");
     //srcport and dstport must already be provided by the user.
     //returns struct xseg_request with basic initializations
-    XSEGLOG2(&lc, D, "Get new request\n");
+    flogger_debug(logger, "Get new request\n");
     req = xseg_get_request(xseg, srcport, dstport, X_ALLOC);
     if (!req) {
-        XSEGLOG2(&lc, W, "Cannot get request\n");
+        flogger_warn(logger, "Cannot get request\n");
         return -1;
     }
     req->op = X_PING;
 
-    XSEGLOG2(&lc, D, "Allocate peer request\n");
+    flogger_debug(logger, "Allocate peer request\n");
     pr = alloc_peer_req(peer);
     if (!pr) {
-        XSEGLOG2(&lc, W, "Cannot allocate peer request (%ld remaining)\n",
-                 peer->nr_ops - xq_count(&peer->free_reqs));
+        flogger_warn(logger, "Cannot allocate peer request (%ld remaining)\n",
+                     peer->nr_ops - xq_count(&peer->free_reqs));
         goto put_xseg_request;
     }
     pr->peer = peer;
@@ -793,14 +794,14 @@ static int send_ping_request(struct peerd *peer, struct bench *prefs)
 
     r = xseg_set_req_data(xseg, req, pr);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Cannot set request data\n");
+        flogger_warn(logger, "Cannot set request data\n");
         goto put_peer_request;
     }
     //Submit the request from the source port to the target port
-    XSEGLOG2(&lc, D, "Submit ping request");
+    flogger_debug(logger, "Submit ping request");
     p = xseg_submit(xseg, req, srcport, X_ALLOC);
     if (p == NoPort) {
-        XSEGLOG2(&lc, W, "Cannot submit request\n");
+        flogger_warn(logger, "Cannot submit request\n");
         goto put_peer_request;
     }
     timer_stop(prefs, prefs->sub_tm, NULL);
@@ -809,7 +810,7 @@ static int send_ping_request(struct peerd *peer, struct bench *prefs)
     //IO is possible
     r = xseg_signal(xseg, p);
     //if (r < 0)
-    //      XSEGLOG2(&lc, W, "Cannot signal destination peer (reason %d)\n", r);
+    //      flogger_warn(logger, "Cannot signal destination peer (reason %d)\n", r);
 
     return 0;
 
@@ -817,7 +818,7 @@ static int send_ping_request(struct peerd *peer, struct bench *prefs)
     free_peer_req(peer, pr);
   put_xseg_request:
     if (xseg_put_request(xseg, req, srcport)) {
-        XSEGLOG2(&lc, W, "Cannot put request\n");
+        flogger_warn(logger, "Cannot put request\n");
     }
     return -1;
 }
@@ -848,7 +849,7 @@ int bench_peerd_loop(void *arg)
     uint64_t loops;
     int r;
 
-    XSEGLOG2(&lc, I, "%s has tid %u.\n", id, pid);
+    flogger_info(logger, "%s has tid %u.\n", id, pid);
     xseg_init_local_signal(xseg, peer->portno_start);
 
     if (GET_FLAG(PROGRESS, prefs->flags) != PROGRESS_NO) {
@@ -866,11 +867,11 @@ int bench_peerd_loop(void *arg)
     while (!(isTerminate() && all_peer_reqs_free(peer))) {
         while (CAN_SEND_REQUEST(prefs)) {
             xseg_cancel_wait(xseg, peer->portno_start);
-            XSEGLOG2(&lc, D, "...because %lu < %lu && %lu < %lu\n",
-                     prefs->status->submitted - prefs->status->received,
-                     prefs->iodepth, prefs->status->received,
-                     prefs->status->max);
-            XSEGLOG2(&lc, D, "Start sending new request\n");
+            flogger_debug(logger, "...because %lu < %lu && %lu < %lu\n",
+                          prefs->status->submitted - prefs->status->received,
+                          prefs->iodepth, prefs->status->received,
+                          prefs->status->max);
+            flogger_debug(logger, "Start sending new request\n");
             r = send_request(peer, prefs);
             if (r < 0) {
                 break;
@@ -898,14 +899,14 @@ int bench_peerd_loop(void *arg)
                 }
             }
         }
-        XSEGLOG2(&lc, I, "%s goes to sleep\n", id);
+        flogger_info(logger, "%s goes to sleep\n", id);
         xseg_wait_signal(xseg, peer->sd, 10000000UL);
         xseg_cancel_wait(xseg, peer->portno_start);
-        XSEGLOG2(&lc, I, "%s woke up\n", id);
+        flogger_info(logger, "%s woke up\n", id);
     }
 
-    XSEGLOG2(&lc, I, "peer->free_reqs = %d, peer->nr_ops = %d\n",
-             xq_count(&peer->free_reqs), peer->nr_ops);
+    flogger_info(logger, "peer->free_reqs = %d, peer->nr_ops = %d\n",
+                 xq_count(&peer->free_reqs), peer->nr_ops);
     return 0;
 }
 
@@ -959,7 +960,7 @@ static void handle_received(struct peerd *peer, struct peer_req *pr)
 
     if (!pr->req) {
         //This is a serious error, so we must stop
-        XSEGLOG2(&lc, E, "Received peer request with no xseg request");
+        flogger_error(logger, "Received peer request with no xseg request");
         terminated++;
         return;
     }
@@ -969,7 +970,7 @@ static void handle_received(struct peerd *peer, struct peer_req *pr)
      * benchmark.
      */
     if (GET_FLAG(PING, prefs->flags) == PING_MODE_ON) {
-        XSEGLOG2(&lc, I, "Ping received. Benchmark can start now.");
+        flogger_info(logger, "Ping received. Benchmark can start now.");
         SET_FLAG(PING, prefs->flags, PING_MODE_OFF);
         start_timer = 1;
         goto out;
@@ -978,7 +979,7 @@ static void handle_received(struct peerd *peer, struct peer_req *pr)
     prefs->status->received++;
 
     if ((GET_FLAG(INSANITY, prefs->flags) < rec->insanity) && !pr->priv) {
-        XSEGLOG2(&lc, W, "Cannot find submission time of request");
+        flogger_warn(logger, "Cannot find submission time of request");
         return;
     }
 
@@ -992,7 +993,7 @@ static void handle_received(struct peerd *peer, struct peer_req *pr)
 
   out:
     if (xseg_put_request(peer->xseg, pr->req, pr->portno)) {
-        XSEGLOG2(&lc, W, "Cannot put xseg request\n");
+        flogger_warn(logger, "Cannot put xseg request\n");
     }
 
     free_peer_req(peer, pr);
@@ -1009,7 +1010,7 @@ int dispatch(struct peerd *peer, struct peer_req *pr, struct xseg_request *req,
     case dispatch_accept:
         //This is wrong, benchmarking peer should not accept requests,
         //only receive them.
-        XSEGLOG2(&lc, W, "Bench peer should not accept requests\n");
+        flogger_warn(logger, "Bench peer should not accept requests\n");
         complete(peer, pr);
         break;
     case dispatch_receive:

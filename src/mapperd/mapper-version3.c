@@ -397,16 +397,16 @@ static struct xseg_request *prepare_write_chunk(struct peer_req *pr,
 
     datalen = v3_chunksize;
 
-    XSEGLOG2(&lc, D, "Starting for map %s, start: %llu, nr: %llu "
-             "offset:%llu, size: %llu",
-             map->volume, chunk->start, chunk->nr,
-             get_offset_in_block(map, chunk->start),
-             v3_objectsize_in_map * chunk->nr);
+    flogger_debug(logger, "Starting for map %s, start: %llu, nr: %llu "
+                  "offset:%llu, size: %llu",
+                  map->volume, chunk->start, chunk->nr,
+                  get_offset_in_block(map, chunk->start),
+                  v3_objectsize_in_map * chunk->nr);
 
     req = get_request(pr, mapper->mbportno, chunk->target, chunk->targetlen,
                       datalen);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return NULL;
     }
 
@@ -417,7 +417,7 @@ static struct xseg_request *prepare_write_chunk(struct peer_req *pr,
     data = xseg_get_data(peer->xseg, req);
     //assert chunk->size > v3_objectsize_in_map
 
-    XSEGLOG2(&lc, D, "Start: %llu, nr: %llu", chunk->start, chunk->nr);
+    flogger_debug(logger, "Start: %llu, nr: %llu", chunk->start, chunk->nr);
     pos = 0;
     for (obj = chunk->start; obj < chunk->start + chunk->nr; obj++) {
         mn = &map->objects[obj];
@@ -447,14 +447,14 @@ static struct xseg_request *prepare_load_chunk(struct peer_req *pr,
     //chunksize will be at most v3_chunksize
     datalen = v3_chunksize;
 
-    XSEGLOG2(&lc, D, "Starting for map %s, start: %llu, nr: %llu, "
-             "offset:%llu, size: %llu",
-             map->volume, chunk->start, chunk->nr, offset, size);
+    flogger_debug(logger, "Starting for map %s, start: %llu, nr: %llu, "
+                  "offset:%llu, size: %llu",
+                  map->volume, chunk->start, chunk->nr, offset, size);
 
     req = get_request(pr, mapper->mbportno, chunk->target, chunk->targetlen,
                       datalen);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return NULL;
     }
 
@@ -475,8 +475,8 @@ struct xseg_request *prepare_write_objects_v3(struct peer_req *pr,
 
     nr_chunks = split_to_chunks(map, start, nr, &chunks);
     if (nr_chunks != 1) {
-        XSEGLOG2(&lc, E, "Map %s, start: %llu, nr: %llu return %d chunks",
-                 map->volume, start, nr, nr_chunks);
+        flogger_error(logger, "Map %s, start: %llu, nr: %llu return %d chunks",
+                      map->volume, start, nr, nr_chunks);
         return NULL;
     }
 
@@ -515,19 +515,19 @@ int read_map_objects_v3(struct map *map, unsigned char *data, uint64_t start,
     }
 
     if (!map->objects) {
-        XSEGLOG2(&lc, D, "Allocating %llu nr_objs for size %llu",
+        flogger_debug(logger, "Allocating %llu nr_objs for size %llu",
                  map->nr_objs, map->size);
         mapping = calloc(map->nr_objs, sizeof(struct mapping));
         if (!mapping) {
-            XSEGLOG2(&lc, E, "Cannot allocate mem for %llu objects",
-                     map->nr_objs);
+            flogger_error(logger, "Cannot allocate mem for %llu objects",
+                          map->nr_objs);
             return -1;
         }
         map->objects = mapping;
         r = initialize_map_objects(map);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot initialize map objects for map %s",
-                     map->volume);
+            flogger_error(logger, "Cannot initialize map objects for map %s",
+                          map->volume);
             goto out_free;
         }
     }
@@ -537,8 +537,8 @@ int read_map_objects_v3(struct map *map, unsigned char *data, uint64_t start,
     for (i = start; i < nr; i++) {
         r = read_object_v3(&mapping[i], data + pos);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Map %s: Could not read object %llu",
-                     map->volume, i);
+            flogger_error(logger, "Map %s: Could not read object %llu",
+                          map->volume, i);
             goto out_free;
         }
         pos += v3_objectsize_in_map;
@@ -564,7 +564,7 @@ static void delete_map_data_v3_cb(struct peer_req *pr,
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
     }
 
     put_request(pr, req);
@@ -591,16 +591,16 @@ static int __delete_map_data_v3(struct peer_req *pr, struct map *map)
         targetlen = get_map_block_name(target, map, blockid);
         req = get_request(pr, mapper->mbportno, target, targetlen, 0);
         if (!req) {
-            XSEGLOG2(&lc, E, "Cannot get request");
+            flogger_error(logger, "Cannot get request");
             goto out_err;
         }
         req->op = X_DELETE;
         req->offset = 0;
         req->size = 0;
-        XSEGLOG2(&lc, D, "Deleting %s(%u)", target, targetlen);
+        flogger_debug(logger, "Deleting %s(%u)", target, targetlen);
         r = send_request(pr, req);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot send request");
+            flogger_error(logger, "Cannot send request");
             goto out_put;
         }
         mio->pending_reqs++;
@@ -621,7 +621,7 @@ static void delete_meta_v3_cb(struct peer_req *pr,
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
     }
 
     put_request(pr, req);
@@ -646,7 +646,7 @@ static int __delete_meta_v3(struct peer_req *pr, struct map *map)
 
     req = get_request(pr, mapper->mbportno, meta_object, meta_object_len, 0);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return -ENOSPC;
     }
 
@@ -656,7 +656,7 @@ static int __delete_meta_v3(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request");
+        flogger_error(logger, "Cannot send request");
         put_request(pr, req);
         return -1;
     }
@@ -718,13 +718,13 @@ static void write_objects_v3_cb(struct peer_req *pr, struct xseg_request *req)
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
         goto out;
     }
 
     if (req->serviced != req->size) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Serviced != size");
+        flogger_error(logger, "Serviced != size");
         goto out;
     }
 
@@ -744,10 +744,10 @@ static int __write_objects_v3(struct peer_req *pr, struct map *map,
     struct chunk *chunks;
     int nr_chunks, i;
 
-    XSEGLOG2(&lc, D, "Writing objects for %s: start: %llu, nr: %llu",
-             map->volume, start, nr);
+    flogger_debug(logger, "Writing objects for %s: start: %llu, nr: %llu",
+                  map->volume, start, nr);
     if (start + nr > map->nr_objs) {
-        XSEGLOG2(&lc, E, "Attempting to write beyond nr_objs");
+        flogger_error(logger, "Attempting to write beyond nr_objs");
         return -1;
     }
 
@@ -763,12 +763,12 @@ static int __write_objects_v3(struct peer_req *pr, struct map *map,
             goto out_free;
 
         }
-        XSEGLOG2(&lc, D, "Writing chunk %s(%u) , start: %llu, nr :%llu",
-                 chunks[i].target, chunks[i].targetlen, chunks[i].start,
-                 chunks[i].nr);
+        flogger_debug(logger, "Writing chunk %s(%u) , start: %llu, nr :%llu",
+                      chunks[i].target, chunks[i].targetlen, chunks[i].start,
+                      chunks[i].nr);
         r = send_request(pr, req);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot send request");
+            flogger_error(logger, "Cannot send request");
             goto out_put;
         }
         mio->pending_reqs++;
@@ -814,13 +814,13 @@ static void write_meta_v3_cb(struct peer_req *pr, struct xseg_request *req)
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
         goto out;
     }
 
     if (req->serviced != req->size) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Serviced != size");
+        flogger_error(logger, "Serviced != size");
         goto out;
     }
 
@@ -855,7 +855,7 @@ static int __write_meta_v3(struct peer_req *pr, struct map *map)
     req = get_request(pr, mapper->mbportno, meta_object, meta_object_len,
                       meta_size);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return -ENOSPC;
     }
 
@@ -885,7 +885,7 @@ static int __write_meta_v3(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request");
+        flogger_error(logger, "Cannot send request");
         put_request(pr, req);
         return -1;
     }
@@ -937,7 +937,7 @@ static void load_map_data_v3_cb(struct peer_req *pr, struct xseg_request *req)
 
     req_ctx = get_req_ctx(mio, req);
     if (!req_ctx) {
-        XSEGLOG2(&lc, E, "Cannot get request context");
+        flogger_error(logger, "Cannot get request context");
         mio->err = 1;
         goto out;
     }
@@ -946,29 +946,30 @@ static void load_map_data_v3_cb(struct peer_req *pr, struct xseg_request *req)
 
     buf = req_ctx->buf;
 
-    XSEGLOG2(&lc, I, "Callback of req %p, buf: %p", req, buf);
+    flogger_info(logger, "Callback of req %p, buf: %p", req, buf);
 
     //buf = (unsigned char *)mio->priv;
     if (!buf) {
-        XSEGLOG2(&lc, E, "Cannot get load buffer");
+        flogger_error(logger, "Cannot get load buffer");
         mio->err = 1;
         goto out;
     }
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
         goto out;
     }
 
     if (req->serviced != req->size) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Serviced != size");
+        flogger_error(logger, "Serviced != size");
         goto out;
     }
 
     data = xseg_get_data(peer->xseg, req);
-    XSEGLOG2(&lc, D, "Memcpy %llu to %p from (%p)", req->serviced, buf, data);
+    flogger_debug(logger, "Memcpy %llu to %p from (%p)", req->serviced, buf,
+                  data);
     memcpy(buf, data, req->serviced);
 
 out:
@@ -995,7 +996,7 @@ static int __load_map_objects_v3(struct peer_req *pr, struct map *map,
     unsigned char *obuf = buf;
 
     if (start + nr > map->nr_objs) {
-        XSEGLOG2(&lc, E, "Attempting to load beyond nr_objs");
+        flogger_error(logger, "Attempting to load beyond nr_objs");
         goto out_err;
     }
 
@@ -1007,12 +1008,12 @@ static int __load_map_objects_v3(struct peer_req *pr, struct map *map,
     for (i = 0; i < nr_chunks; i++) {
         req = prepare_load_chunk(pr, map, &chunk[i]);
         if (!req) {
-            XSEGLOG2(&lc, E, "Cannot get request");
+            flogger_error(logger, "Cannot get request");
             goto out_free;
         }
-        XSEGLOG2(&lc, D, "Reading chunk %s(%u) , start %llu, nr :%llu",
-                 chunk[i].target, chunk[i].targetlen,
-                 chunk[i].start, chunk[i].nr);
+        flogger_debug(logger, "Reading chunk %s(%u) , start %llu, nr :%llu",
+                      chunk[i].target, chunk[i].targetlen,
+                      chunk[i].start, chunk[i].nr);
         req_ctx = calloc(1, sizeof(struct req_ctx));
         if (!req_ctx) {
             goto out_put;
@@ -1022,22 +1023,22 @@ static int __load_map_objects_v3(struct peer_req *pr, struct map *map,
 
         r = set_req_ctx(mio, req, req_ctx);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot set request ctx");
+            flogger_error(logger, "Cannot set request ctx");
             goto out_put;
         }
 
-        XSEGLOG2(&lc, D, "Send buf: %p, offset from start: %d, "
-                 "nr_objs: %d", buf, buf - obuf,
-                 (buf - obuf) / v3_objectsize_in_map);
+        flogger_debug(logger, "Send buf: %p, offset from start: %d, "
+                      "nr_objs: %d", buf, buf - obuf,
+                      (buf - obuf) / v3_objectsize_in_map);
 
         buf += chunk[i].nr * v3_objectsize_in_map;
-        XSEGLOG2(&lc, D, "Next buf: %p, offset from start: %d, "
-                 "nr_objs: %d", buf, buf - obuf,
-                 (buf - obuf) / v3_objectsize_in_map);
+        flogger_debug(logger, "Next buf: %p, offset from start: %d, "
+                      "nr_objs: %d", buf, buf - obuf,
+                      (buf - obuf) / v3_objectsize_in_map);
 
         r = send_request(pr, req);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot send request");
+            flogger_error(logger, "Cannot send request");
             goto out_unset_ctx;
         }
         mio->pending_reqs++;
@@ -1067,19 +1068,19 @@ static int load_map_objects_v3(struct peer_req *pr, struct map *map,
     uint32_t rem;
 
     if (map->flags & MF_MAP_DELETED) {
-        XSEGLOG2(&lc, I, "Map deleted. Ignoring loading objects");
+        flogger_info(logger, "Map deleted. Ignoring loading objects");
         return 0;
     }
 
     buf = calloc(nr, sizeof(unsigned char) * v3_objectsize_in_map);
     if (!buf) {
-        XSEGLOG2(&lc, E, "Cannot allocate memory");
+        flogger_error(logger, "Cannot allocate memory");
         return -1;
     }
 
     mio->priv = buf;
     mio->cb = load_map_data_v3_cb;
-    XSEGLOG2(&lc, D, "Allocated buf: %p for %llu objs", buf, nr);
+    flogger_debug(logger, "Allocated buf: %p for %llu objs", buf, nr);
 
     r = __load_map_objects_v3(pr, map, start, nr, buf);
     if (r < 0) {
@@ -1091,10 +1092,10 @@ static int load_map_objects_v3(struct peer_req *pr, struct map *map,
     }
 
     if (mio->err) {
-        XSEGLOG2(&lc, E, "Error issuing load request");
+        flogger_error(logger, "Error issuing load request");
         goto out;
     }
-    XSEGLOG2(&lc, D, "Loaded mapdata. Proceed to reading");
+    flogger_debug(logger, "Loaded mapdata. Proceed to reading");
     r = read_map_objects_v3(map, buf, start, nr);
     if (r < 0) {
         mio->err = 1;
@@ -1117,13 +1118,13 @@ static void load_meta_v3_cb(struct peer_req *pr, struct xseg_request *req)
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
         goto out;
     }
 
     if (req->serviced != req->size) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Serviced != size");
+        flogger_error(logger, "Serviced != size");
         goto out;
     }
 
@@ -1225,7 +1226,7 @@ static int __load_meta_v3(struct peer_req *pr, struct map *map)
 
     req = get_request(pr, mapper->mbportno, meta_object, meta_object_len, size);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return -ENOSPC;
     }
 
@@ -1235,7 +1236,7 @@ static int __load_meta_v3(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request");
+        flogger_error(logger, "Cannot send request");
         put_request(pr, req);
         return -1;
     }
@@ -1253,13 +1254,13 @@ static void load_meta_header_v3_cb(struct peer_req *pr, struct xseg_request *req
 
     if (req->state & XS_FAILED) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Request failed");
+        flogger_error(logger, "Request failed");
         goto out;
     }
 
     if (req->serviced != req->size) {
         mio->err = 1;
-        XSEGLOG2(&lc, E, "Serviced != size");
+        flogger_error(logger, "Serviced != size");
         goto out;
     }
 
@@ -1289,7 +1290,7 @@ static int __load_meta_header_v3(struct peer_req *pr, struct map *map)
     req = get_request(pr, mapper->mbportno, meta_object, meta_object_len,
                       V3_META_HEADER_SIZE);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request");
+        flogger_error(logger, "Cannot get request");
         return -ENOSPC;
     }
 
@@ -1299,7 +1300,7 @@ static int __load_meta_header_v3(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request");
+        flogger_error(logger, "Cannot send request");
         put_request(pr, req);
         return -1;
     }

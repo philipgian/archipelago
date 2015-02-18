@@ -37,8 +37,8 @@ char *null_terminate(char *target, uint32_t targetlen)
 	do{ \
 		ta--; \
 		waiters_for_req++; \
-		XSEGLOG2(&lc, D, "Waiting for request. Waiters: %u", \
-				waiters_for_req); \
+		flogger_debug(logger, "Waiting for request. Waiters: %u", \
+		       	      waiters_for_req); \
 		st_cond_wait(req_cond); \
 	}while(0)
 
@@ -47,8 +47,8 @@ char *null_terminate(char *target, uint32_t targetlen)
 		if (waiters_for_req) { \
 			ta++; \
 			waiters_for_req--; \
-			XSEGLOG2(&lc, D, "Siganling one request. Waiters: %u", \
-					waiters_for_req); \
+			flogger_debug(logger, "Siganling one request. Waiters: %u", \
+                          waiters_for_req); \
 			st_cond_signal(req_cond); \
 		} \
 	}while(0)
@@ -64,8 +64,8 @@ struct xseg_request *get_request(struct peer_req *pr, xport dst, char *target,
     req = xseg_get_request(peer->xseg, pr->portno, dst, X_ALLOC);
     if (!req) {
         if (!nr_reqs) {
-            XSEGLOG2(&lc, E, "Cannot allocate request for target %s",
-                     null_terminate(target, targetlen));
+            flogger_error(logger, "Cannot allocate request for target %s",
+                          null_terminate(target, targetlen));
             return NULL;
         } else {
             wait_for_req();
@@ -76,8 +76,8 @@ struct xseg_request *get_request(struct peer_req *pr, xport dst, char *target,
     if (r < 0) {
         xseg_put_request(peer->xseg, req, pr->portno);
         if (!nr_reqs) {
-            XSEGLOG2(&lc, E, "Cannot prepare request for target",
-                     null_terminate(target, targetlen));
+            flogger_error(logger, "Cannot prepare request for target",
+                          null_terminate(target, targetlen));
             return NULL;
         } else {
             wait_for_req();
@@ -112,20 +112,20 @@ int send_request(struct peer_req *pr, struct xseg_request *req)
 
 	r = xseg_set_req_data(peer->xseg, req, pr);
 	if (r < 0){
-		XSEGLOG2(&lc, E, "Cannot set request data for req %p, pr: %p",
-				req, pr);
+		flogger_error(logger, "Cannot set request data for req %p, pr: %p",
+                      req, pr);
 		return -1;
 	}
 	xport p = xseg_submit(peer->xseg, req, pr->portno, X_ALLOC);
 	if (p == NoPort){
-		XSEGLOG2(&lc, E, "Cannot submit request %p, pr: %p",
-				req, pr);
+		flogger_error(logger, "Cannot submit request %p, pr: %p",
+                      req, pr);
 		xseg_get_req_data(peer->xseg, req, &dummy);
 		return -1;
 	}
 	r = xseg_signal(peer->xseg, p);
 	if (r < 0)
-		XSEGLOG2(&lc, W, "Cannot signal port %u", p);
+		flogger_warn(logger, "Cannot signal port %u", p);
 
 	return 0;
 }
@@ -141,7 +141,7 @@ int resize_request(struct peer_req *pr, struct xseg_request *req, uint64_t size)
     strncpy(buf, target, pr->req->targetlen);
     r = xseg_resize_request(peer->xseg, pr->req, pr->req->targetlen, size);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot resize request");
+        flogger_error(logger, "Cannot resize request");
         return -ENOMEM;
     }
     target = xseg_get_target(peer->xseg, pr->req);

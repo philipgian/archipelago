@@ -145,9 +145,9 @@ class Peer(object):
     cli_opts = None
 
     def __init__(self, role=None, daemon=True, nr_ops=16,  # NOQA
-                 logfile=None, pidfile=None, portno_start=None,
+                 logging_conf=None, pidfile=None, portno_start=None,
                  portno_end=None, log_level=0, spec=None, threshold=None,
-                 user=None, group=None, umask="0o007"):
+                 user=None, group=None, umask="0o007", logger=None):
         if not role:
             raise Error("Role was not provided")
         self.role = role
@@ -163,6 +163,8 @@ class Peer(object):
         self.user_uid = getpwnam(self.user).pw_uid
         self.group_gid = getgrnam(self.group).gr_gid
         self.umask = int(umask, 0)
+        self.logging_conf = logging_conf
+        self.logger = logger
 
         self.nr_ops = nr_ops
         if not self.nr_ops > 0:
@@ -187,22 +189,11 @@ class Peer(object):
             raise Error("Xseg spec was not provided for %s" % role)
         self.spec = spec
 
-        if logfile:
-            self.logfile = logfile
-        else:
-            self.logfile = os.path.join(LOGS_PATH, role + LOG_SUFFIX)
-
         if pidfile:
             self.pidfile = pidfile
         else:
             self.pidfile = os.path.join(PIDFILE_PATH, role + PID_SUFFIX)
 
-        try:
-            if not os.path.isdir(os.path.dirname(self.logfile)):
-                raise Error("Log path %s does not exist" % self.logfile)
-        except:
-            raise Error("Log path %s does not exist or is not a directory" %
-                        self.logfile)
 
         self.log_level = log_level
         self.threshold = threshold
@@ -232,7 +223,6 @@ class Peer(object):
 
         os.chmod(os.path.dirname(self.pidfile), stat.S_IRWXU | stat.S_IRWXG)
         os.chown(os.path.dirname(self.pidfile), -1, self.group_gid)
-        os.chown(os.path.dirname(self.logfile), -1, self.group_gid)
 
         if self.get_pid():
             raise Error("Peer has valid pidfile")
@@ -291,9 +281,12 @@ class Peer(object):
         if self.nr_ops:
             self.cli_opts.append("-n")
             self.cli_opts.append(str(self.nr_ops))
-        if self.logfile:
+        if self.logging_conf:
             self.cli_opts.append("-l")
-            self.cli_opts.append(self.logfile)
+            self.cli_opts.append(self.logging_conf)
+        if self.logger:
+            self.cli_opts.append("--logger")
+            self.cli_opts.append(self.logger)
         if self.pidfile:
             self.cli_opts.append("--pidfile")
             self.cli_opts.append(self.pidfile)
@@ -900,14 +893,16 @@ def createDict(cfg, section):  # NOQA
         sec_dic['portno_end'] = cfg.getint(section, 'portno_end')
         sec_dic['nr_ops'] = cfg.getint(section, 'nr_ops')
 
-    if cfg.has_option(section, 'logfile'):
-        sec_dic['logfile'] = str(cfg.get(section, 'logfile'))
     if cfg.has_option(section, 'threshold'):
         sec_dic['threshold'] = cfg.getint(section, 'threshold')
     if cfg.has_option(section, 'log_level'):
         sec_dic['log_level'] = cfg.getint(section, 'log_level')
     if cfg.has_option(section, 'umask'):
         sec_dic['umask'] = cfg.get(section, 'umask')
+    if cfg.has_option(section, 'logging_conf'):
+        sec_dic['logging_conf'] = cfg.get(section, 'logging_conf')
+    if cfg.has_option(section, 'logger'):
+        sec_dic['logger'] = cfg.get(section, 'logger')
 
     if t == 'file_blocker':
         sec_dic['nr_threads'] = cfg.getint(section, 'nr_threads')
@@ -944,8 +939,6 @@ def createDict(cfg, section):  # NOQA
             sec_dic['portno_end'] = cfg.getint(section, 'portno_end')
         if cfg.has_option(section, 'umask'):
             sec_dic['umask'] = cfg.get(section, 'umask')
-        if cfg.has_option(section, 'logging_conf'):
-            sec_dic['logging_conf'] = cfg.get(section, 'logging_conf')
         if cfg.has_option(section, 'socket_path'):
             sec_dic['socket_path'] = cfg.get(section, 'socket_path')
         if cfg.has_option(section, 'pidfile'):

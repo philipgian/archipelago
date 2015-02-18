@@ -321,7 +321,7 @@ struct req_ctx {
 	do {					\
 		ta--;				\
 		__get_mapper_io(pr)->active = 0;\
-		XSEGLOG2(&lc, D, "Waiting on pr %lx, ta: %u",  pr, ta); \
+		flogger_debug(logger, "Waiting on pr %lx, ta: %u",  pr, ta); \
 		st_cond_wait(__pr->cond);	\
 	} while (__condition__)
 
@@ -329,8 +329,8 @@ struct req_ctx {
 	do {					\
 		ta--;				\
 		__mn->waiters++;		\
-		XSEGLOG2(&lc, D, "Waiting on map node %lx, waiters: %u, \
-			ta: %u",  __mn, __mn->waiters, ta);  \
+		flogger_debug(logger, "Waiting on map node %lx, waiters: %u, \
+		              ta: %u",  __mn, __mn->waiters, ta);  \
 		st_cond_wait(__mn->cond);	\
 	} while (__condition__)
 
@@ -338,8 +338,8 @@ struct req_ctx {
 	do {					\
 		ta--;				\
 		__map->waiters++;		\
-		XSEGLOG2(&lc, D, "Waiting on map %lx %s, waiters: %u, ta: %u",\
-				   __map, __map->volume, __map->waiters, ta); \
+		flogger_debug(logger, "Waiting on map %lx %s, waiters: %u, ta: %u",\
+				      __map, __map->volume, __map->waiters, ta); \
 		st_cond_wait(__map->cond);	\
 	} while (__condition__)
 
@@ -347,8 +347,8 @@ struct req_ctx {
 	do {					\
 		ta--;				\
 		__map->waiters_users++;		\
-		XSEGLOG2(&lc, D, "Waiting for objects ready on map %lx %s, waiters: %u, ta: %u",\
-				   __map, __map->volume, __map->waiters_users, ta); \
+		flogger_debug(logger, "Waiting for objects ready on map %lx %s, waiters: %u, ta: %u",\
+				      __map, __map->volume, __map->waiters_users, ta); \
 		st_cond_wait(__map->users_cond);	\
 	} while (__map->users)
 
@@ -356,8 +356,8 @@ struct req_ctx {
 	do {					\
 		ta--;				\
 		__map->waiters_pending_io++;		\
-		XSEGLOG2(&lc, D, "Waiting for objects ready on map %lx %s, waiters: %u, ta: %u",\
-				   __map, __map->volume, __map->waiters_pending_io, ta); \
+		flogger_debug(logger, "Waiting for objects ready on map %lx %s, waiters: %u, ta: %u",\
+				      __map, __map->volume, __map->waiters_pending_io, ta); \
 		st_cond_wait(__map->pending_io_cond);	\
 	} while (__map->pending_io)
 
@@ -365,7 +365,7 @@ struct req_ctx {
 	do { 					\
 		if (!__get_mapper_io(pr)->active){\
 			ta++;			\
-			XSEGLOG2(&lc, D, "Signaling  pr %lx, ta: %u",  pr, ta);\
+			flogger_debug(logger, "Signaling  pr %lx, ta: %u",  pr, ta);\
 			__get_mapper_io(pr)->active = 1;\
 			st_cond_signal(__pr->cond);	\
 		}				\
@@ -373,12 +373,12 @@ struct req_ctx {
 
 #define signal_map(__map)			\
 	do { 					\
-		XSEGLOG2(&lc, D, "Checking map %lx %s. Waiters %u, ta: %u", \
-				__map, __map->volume, __map->waiters, ta);  \
+		flogger_debug(logger, "Checking map %lx %s. Waiters %u, ta: %u", \
+				      __map, __map->volume, __map->waiters, ta);  \
 		if (__map->waiters) {		\
 			ta += __map->waiters;		\
-			XSEGLOG2(&lc, D, "Signaling map %lx %s, waiters: %u, \
-			ta: %u",  __map, __map->volume, __map->waiters, ta); \
+			flogger_debug(logger, "Signaling map %lx %s, waiters: %u, \
+			              ta: %u",  __map, __map->volume, __map->waiters, ta); \
 			__map->waiters = 0;	\
 			st_cond_broadcast(__map->cond);	\
 		}				\
@@ -389,8 +389,8 @@ struct req_ctx {
 		/* assert __map->users == 0 */ \
 		if (__map->waiters_users) {		\
 			ta += __map->waiters_users;		\
-			XSEGLOG2(&lc, D, "Signaling objects ready for map %lx %s, waiters: %u, \
-			ta: %u",  __map, __map->volume, __map->waiters_users, ta); \
+			flogger_debug(logger, "Signaling objects ready for map %lx %s, waiters: %u, \
+			              ta: %u",  __map, __map->volume, __map->waiters_users, ta); \
 			__map->waiters_users = 0;	\
 			st_cond_broadcast(__map->users_cond);	\
 		}				\
@@ -401,8 +401,8 @@ struct req_ctx {
 		/* assert __map->users == 0 */ \
 		if (__map->waiters_pending_io) {		\
 			ta += __map->waiters_pending_io;		\
-			XSEGLOG2(&lc, D, "Signaling pending io ready for map %lx %s, waiters: %u, \
-			ta: %u",  __map, __map->volume, __map->waiters_pending_io, ta); \
+			flogger_debug(logger, "Signaling pending io ready for map %lx %s, waiters: %u, \
+			              ta: %u",  __map, __map->volume, __map->waiters_pending_io, ta); \
 			__map->waiters_pending_io = 0;	\
 			st_cond_broadcast(__map->pending_io_cond);\
 		}				\
@@ -413,8 +413,8 @@ struct req_ctx {
 	do { 					\
 		if (__mn->waiters) {		\
 			ta += __mn->waiters;	\
-			XSEGLOG2(&lc, D, "Signaling map node %lx, waiters: \
-			%u, ta: %u",  __mn, __mn->waiters, ta); \
+			flogger_debug(logger, "Signaling map node %lx, waiters: \
+			              %u, ta: %u",  __mn, __mn->waiters, ta); \
 			__mn->waiters = 0;	\
 			st_cond_broadcast(__mn->cond);	\
 		}				\

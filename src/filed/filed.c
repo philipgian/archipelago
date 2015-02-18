@@ -79,8 +79,8 @@ static void *cache_node_init(void *p, void *xh)
         return NULL;
     }
 
-    XSEGLOG2(&lc, D, "Initialing node h: %llu with %p",
-             (long long unsigned) h, fdentry);
+    flogger_debug(logger, "Initialing node h: %llu with %p",
+                  (long long unsigned)h, fdentry);
 
     fdentry->fd = -1;
     fdentry->flags = 0;
@@ -93,7 +93,7 @@ static int cache_init(void *p, void *e)
     struct fdcache_entry *fdentry = (struct fdcache_entry *) e;
 
     if (fdentry->fd != -1) {
-        XSEGLOG2(&lc, E, "Found invalid fd %d", fdentry->fd);
+        flogger_error(logger, "Found invalid fd %d", fdentry->fd);
         return -1;
     }
 
@@ -104,7 +104,7 @@ static void cache_put(void *p, void *e)
 {
     struct fdcache_entry *fdentry = (struct fdcache_entry *) e;
 
-    XSEGLOG2(&lc, D, "Putting entry %p with fd %d", fdentry, fdentry->fd);
+    flogger_debug(logger, "Putting entry %p with fd %d", fdentry, fdentry->fd);
 
     if (fdentry->fd != -1) {
         close(fdentry->fd);
@@ -138,7 +138,7 @@ static void pfiled_fail(struct peerd *peer, struct peer_req *pr)
 
 static void handle_unknown(struct peerd *peer, struct peer_req *pr)
 {
-    XSEGLOG2(&lc, W, "unknown request op");
+    flogger_warn(logger, "unknown request op");
     pfiled_fail(peer, pr);
 }
 
@@ -255,7 +255,7 @@ static int get_dirs_pithos(char buf[6], struct pfiled *pfiled, char *target,
         ret = -errno;
         goto out_free;
     }
-    XSEGLOG2(&lc, I, "Found pithos file %s to on old path", pithos_path);
+    flogger_info(logger, "Found pithos file %s to on old path", pithos_path);
 
     if (!pfiled->migrate) {
         ret = 0;
@@ -264,7 +264,7 @@ static int get_dirs_pithos(char buf[6], struct pfiled *pfiled, char *target,
 
     r = fstat(pithos_fd, &pithos_st);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Fail in stat for pithos_file %s", pithos_path);
+        flogger_error(logger, "Fail in stat for pithos_file %s", pithos_path);
         ret = -EIO;
         goto out_close_pithos;
     }
@@ -279,33 +279,33 @@ static int get_dirs_pithos(char buf[6], struct pfiled *pfiled, char *target,
     r = link(pithos_path, filed_path);
     if (r < 0) {
         if (errno != EEXIST) {
-            XSEGLOG2(&lc, E, "Could not link %s to %s (errno: %d)",
-                     pithos_path, filed_path, errno);
+            flogger_error(logger, "Could not link %s to %s (errno: %d)",
+                          pithos_path, filed_path, errno);
             ret = -EIO;
             goto out_close_pithos;
         }
-        XSEGLOG2(&lc, I, "Could not link %s to %s. Link already exists",
-                 pithos_path, filed_path);
+        flogger_info(logger, "Could not link %s to %s. Link already exists",
+                     pithos_path, filed_path);
 
         r = stat(filed_path, &filed_st);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Could not stat %s (errno: %d)",
-                     filed_path, errno);
+            flogger_error(logger, "Could not stat %s (errno: %d)",
+                          filed_path, errno);
             ret = -EIO;
             goto out_close_pithos;
         }
         if (filed_st.st_ino != pithos_st.st_ino) {
             //not the same file.
             //should we hash the contents ?
-            XSEGLOG2(&lc, E, "Old pithos file %s has different "
-                     "inode from filed file %s", pithos_path, filed_path);
+            flogger_error(logger, "Old pithos file %s has different "
+                          "inode from filed file %s", pithos_path, filed_path);
             ret = -EIO;
             goto out_close_pithos;
         }
     }
 
-    XSEGLOG2(&lc, I, "Successfully linked pithos_file %s to %s",
-             pithos_path, filed_path);
+    flogger_info(logger, "Successfully linked pithos_file %s to %s",
+                 pithos_path, filed_path);
 
     //unlink pithos_path
     r = unlink(pithos_path);
@@ -316,7 +316,7 @@ static int get_dirs_pithos(char buf[6], struct pfiled *pfiled, char *target,
          * process takes care of it, let the external migration tool
          * that will finilize the migration handle it.
          */
-        XSEGLOG2(&lc, W, "Could not remove old pithos file");
+        flogger_warn(logger, "Could not remove old pithos file");
     }
 
     /* buf is already fixed */
@@ -402,14 +402,14 @@ static ssize_t persisting_read(int fd, void *data, size_t size, off_t offset)
 {
     ssize_t r = 0, sum = 0;
     char error_str[1024];
-    XSEGLOG2(&lc, D, "fd: %d, size: %d, offset: %d", fd, size, offset);
+    flogger_debug(logger, "fd: %d, size: %d, offset: %d", fd, size, offset);
 
     while (sum < size) {
-        XSEGLOG2(&lc, D, "read: %llu, (aligned)size: %llu", sum, size);
+        flogger_debug(logger, "read: %llu, (aligned)size: %llu", sum, size);
         r = pread(fd, (char *) data + sum, size - sum, offset + sum);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "fd: %d, Error: %s", fd,
-                     strerror_r(errno, error_str, 1023));
+            flogger_error(logger, "fd: %d, Error: %s", fd,
+                          strerror_r(errno, error_str, 1023));
             break;
         } else if (r == 0) {
             break;
@@ -417,12 +417,12 @@ static ssize_t persisting_read(int fd, void *data, size_t size, off_t offset)
             sum += r;
         }
     }
-    XSEGLOG2(&lc, D, "read: %llu, (aligned)size: %llu", sum, size);
+    flogger_debug(logger, "read: %llu, (aligned)size: %llu", sum, size);
 
     if (sum == 0 && r < 0) {
         sum = r;
     }
-    XSEGLOG2(&lc, D, "Finished. Read %d, r = %d", sum, r);
+    flogger_debug(logger, "Finished. Read %d, r = %d", sum, r);
 
     return sum;
 }
@@ -431,9 +431,9 @@ static ssize_t persisting_write(int fd, void *data, size_t size, off_t offset)
 {
     ssize_t r = 0, sum = 0;
 
-    XSEGLOG2(&lc, D, "fd: %d, size: %d, offset: %d", fd, size, offset);
+    flogger_debug(logger, "fd: %d, size: %d, offset: %d", fd, size, offset);
     while (sum < size) {
-        XSEGLOG2(&lc, D, "written: %llu, (aligned)size: %llu", sum, size);
+        flogger_debug(logger, "written: %llu, (aligned)size: %llu", sum, size);
         r = pwrite(fd, (char *) data + sum, size - sum, offset + sum);
         if (r < 0) {
             break;
@@ -441,12 +441,12 @@ static ssize_t persisting_write(int fd, void *data, size_t size, off_t offset)
             sum += r;
         }
     }
-    XSEGLOG2(&lc, D, "written: %llu, (aligned)size: %llu", sum, size);
+    flogger_debug(logger, "written: %llu, (aligned)size: %llu", sum, size);
 
     if (sum == 0 && r < 0) {
         sum = r;
     }
-    XSEGLOG2(&lc, D, "Finished. Wrote %d, r = %d", sum, r);
+    flogger_debug(logger, "Finished. Wrote %d, r = %d", sum, r);
 
     return sum;
 }
@@ -463,9 +463,9 @@ static ssize_t aligned_read(int fd, void *data, ssize_t size, off_t offset,
     misaligned_data = (unsigned long) data % alignment;
     misaligned_size = size % alignment;
     misaligned_offset = offset % alignment;
-    XSEGLOG2(&lc, D,
-             "misaligned_data: %u, misaligned_size: %u, misaligned_offset: %u",
-             misaligned_data, misaligned_size, misaligned_offset);
+    flogger_debug(logger,
+                  "misaligned_data: %u, misaligned_size: %u, misaligned_offset: %u",
+                  misaligned_data, misaligned_size, misaligned_offset);
     if (misaligned_data || misaligned_size || misaligned_offset) {
         aligned_offset = offset - misaligned_offset;
         aligned_size = size + misaligned_offset;
@@ -482,8 +482,9 @@ static ssize_t aligned_read(int fd, void *data, ssize_t size, off_t offset,
         aligned_size = size;
     }
 
-    XSEGLOG2(&lc, D, "aligned_data: %u, aligned_size: %u, aligned_offset: %u",
-             tmp_data, aligned_size, aligned_offset);
+    flogger_debug(logger,
+                  "aligned_data: %u, aligned_size: %u, aligned_offset: %u",
+                  tmp_data, aligned_size, aligned_offset);
     r = persisting_read(fd, tmp_data, aligned_size, aligned_offset);
 
     //FIXME if r < size ?
@@ -541,20 +542,20 @@ static ssize_t aligned_write(int fd, void *data, size_t size, off_t offset,
             return -1;
         }
 
-        XSEGLOG2(&lc, D,
-                 "fd: %d, misaligned_data: %u, misaligned_size: %u, misaligned_offset: %u",
-                 fd, misaligned_data, misaligned_size, misaligned_offset);
-        XSEGLOG2(&lc, D,
-                 "fd: %d, aligned_data: %u, aligned_size: %u, aligned_offset: %u",
-                 fd, tmp_data, aligned_size, aligned_offset);
-        XSEGLOG2(&lc, D, "fd: %d, locking from %u to %u", fd, aligned_offset,
-                 aligned_offset + aligned_size);
+        flogger_debug(logger,
+                      "fd: %d, misaligned_data: %u, misaligned_size: %u, misaligned_offset: %u",
+                      fd, misaligned_data, misaligned_size, misaligned_offset);
+        flogger_debug(logger,
+                      "fd: %d, aligned_data: %u, aligned_size: %u, aligned_offset: %u",
+                      fd, tmp_data, aligned_size, aligned_offset);
+        flogger_debug(logger, "fd: %d, locking from %u to %u", fd, aligned_offset,
+                      aligned_offset + aligned_size);
         __fcntl_lock(fd, aligned_offset,
                      aligned_size + alignment - misaligned_size);
         locked = 1;
 
         if (misaligned_offset) {
-            XSEGLOG2(&lc, D, "fd: %d, size: %d, offset: %d", fd, size, offset);
+            flogger_debug(logger, "fd: %d, size: %d, offset: %d", fd, size, offset);
             /* read misaligned_offset */
             read_size = alignment;
             r = persisting_read(fd, tmp_data, alignment, aligned_offset);
@@ -589,8 +590,8 @@ static ssize_t aligned_write(int fd, void *data, size_t size, off_t offset,
     r = persisting_write(fd, tmp_data, aligned_size, aligned_offset);
 
     if (locked) {
-        XSEGLOG2(&lc, D, "fd: %d, unlocking from %u to %u", fd, aligned_offset,
-                 aligned_offset + aligned_size);
+        flogger_debug(logger, "fd: %d, unlocking from %u to %u", fd,
+                      aligned_offset, aligned_offset + aligned_size);
         __fcntl_unlock(fd, aligned_offset,
                        aligned_size + alignment - misaligned_size);
     }
@@ -646,7 +647,7 @@ static ssize_t generic_io_path(char *path, void *data, size_t size,
     if (fd < 0) {
         return -1;
     }
-    XSEGLOG2(&lc, D, "Opened file %s as fd %d", path, fd);
+    flogger_debug(logger, "Opened file %s as fd %d", path, fd);
 
     if (write) {
         r = filed_write(fd, data, size, offset, flags & O_DIRECT);
@@ -678,7 +679,7 @@ static ssize_t pfiled_read_name(struct pfiled *pfiled, char *name,
     int r;
     r = create_path(path, pfiled, name, namelen, 0);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not create path");
+        flogger_error(logger, "Could not create path");
         return -1;
     }
     return read_path(path, data, size, offset, pfiled->directio);
@@ -703,7 +704,7 @@ static ssize_t pfiled_write_name(struct pfiled *pfiled, char *name,
     int r;
     r = create_path(path, pfiled, name, namelen, 1);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not create path");
+        flogger_error(logger, "Could not create path");
         return -1;
     }
     return write_path(path, data, size, offset, pfiled->directio,
@@ -714,8 +715,8 @@ static int is_target_valid_len(struct pfiled *pfiled, char *target,
                                uint32_t targetlen, int mode)
 {
     if (targetlen > XSEG_MAX_TARGETLEN) {
-        XSEGLOG2(&lc, E, "Invalid targetlen %u, max: %u",
-                 targetlen, XSEG_MAX_TARGETLEN);
+        flogger_error(logger, "Invalid targetlen %u, max: %u",
+                      targetlen, XSEG_MAX_TARGETLEN);
         return -1;
     }
     if (mode == WRITE || mode == READ) {
@@ -729,18 +730,18 @@ static int is_target_valid_len(struct pfiled *pfiled, char *target,
         if (!pfiled->prefix_len
             || strncmp(target, pfiled->prefix, pfiled->prefix_len)) {
             if (targetlen < 6) {
-                XSEGLOG2(&lc, E, "Targetlen should be at least 6");
+                flogger_error(logger, "Targetlen should be at least 6");
                 return -1;
             }
         } else {
             if (targetlen < pfiled->prefix_len + 6) {
-                XSEGLOG2(&lc, E, "Targetlen should be at least prefix "
-                         "len(%u) + 6", pfiled->prefix_len);
+                flogger_error(logger, "Targetlen should be at least prefix "
+                              "len(%u) + 6", pfiled->prefix_len);
                 return -1;
             }
         }
     } else {
-        XSEGLOG2(&lc, E, "Invalid mode");
+        flogger_error(logger, "Invalid mode");
         return -1;
     }
 
@@ -762,9 +763,9 @@ static int open_file_path(struct pfiled *pfiled, char *path, int create)
     flags = O_RDWR;
     if (create) {
         flags |= O_CREAT;
-        XSEGLOG2(&lc, D, "Opening file %s with O_RDWR|O_CREAT", path);
+        flogger_debug(logger, "Opening file %s with O_RDWR|O_CREAT", path);
     } else {
-        XSEGLOG2(&lc, D, "Opening file %s with O_RDWR", path);
+        flogger_debug(logger, "Opening file %s with O_RDWR", path);
     }
 
     if (pfiled->directio) {
@@ -774,8 +775,8 @@ static int open_file_path(struct pfiled *pfiled, char *path, int create)
     fd = open(path, flags,
               S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if (fd < 0) {
-        XSEGLOG2(&lc, E, "Could not open file %s. Error: %s", path,
-                 strerror_r(errno, error_str, 1023));
+        flogger_error(logger, "Could not open file %s. Error: %s", path,
+                      strerror_r(errno, error_str, 1023));
         return -errno;
     }
 
@@ -800,7 +801,7 @@ static int open_file_write(struct pfiled *pfiled, char *target,
 
     r = create_path(tmp, pfiled, target, targetlen, 1);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not create path");
+        flogger_error(logger, "Could not create path");
         return -1;
     }
 
@@ -815,7 +816,7 @@ static int open_file_read(struct pfiled *pfiled, char *target,
 
     r = create_path(tmp, pfiled, target, targetlen, 0);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not create path");
+        flogger_error(logger, "Could not create path");
         return -1;
     }
 
@@ -830,7 +831,7 @@ static int open_file(struct pfiled *pfiled, char *target, uint32_t targetlen,
     } else if (mode == READ) {
         return open_file_read(pfiled, target, targetlen);
     } else {
-        XSEGLOG2(&lc, E, "Invalid mode for target");
+        flogger_error(logger, "Invalid mode for target");
     }
     return -1;
 }
@@ -844,64 +845,64 @@ static int dir_open(struct pfiled *pfiled, struct fio *fio,
     char name[XSEG_MAX_TARGETLEN + 1];
 
     if (targetlen > XSEG_MAX_TARGETLEN) {
-        XSEGLOG2(&lc, E, "Invalid targetlen %u, max: %u",
-                 targetlen, XSEG_MAX_TARGETLEN);
+        flogger_error(logger, "Invalid targetlen %u, max: %u",
+                      targetlen, XSEG_MAX_TARGETLEN);
         return -1;
     }
     strncpy(name, target, targetlen);
     name[targetlen] = '\0';
-    XSEGLOG2(&lc, I, "Dir open started for %s", name);
+    flogger_info(logger, "Dir open started for %s", name);
 
     h = xcache_lookup(&pfiled->cache, name);
     if (h == NoEntry) {
         r = is_target_valid_len(pfiled, target, targetlen, mode);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Invalid len for target %s", name);
+            flogger_error(logger, "Invalid len for target %s", name);
             goto out_err;
         }
 
         h = xcache_alloc_init(&pfiled->cache, name);
         if (h == NoEntry) {
             /* FIXME add waitq to wait for free */
-            XSEGLOG2(&lc, E, "Could not allocate cache entry for %s", name);
+            flogger_error(logger, "Could not allocate cache entry for %s", name);
             goto out_err;
         }
-        XSEGLOG2(&lc, D, "Allocated new handler %llu for %s",
-                 (long long unsigned) h, name);
+        flogger_debug(logger, "Allocated new handler %llu for %s",
+                      (long long unsigned)h, name);
 
         e = xcache_get_entry(&pfiled->cache, h);
         if (!e) {
-            XSEGLOG2(&lc, E, "Alloced handler but no valid fd cache entry");
+            flogger_error(logger, "Alloced handler but no valid fd cache entry");
             goto out_free;
         }
 
         /* open/create file */
         fd = open_file(pfiled, target, targetlen, mode);
         if (fd < 0) {
-            XSEGLOG2(&lc, E, "Could not open file for target %s", name);
+            flogger_error(logger, "Could not open file for target %s", name);
             goto out_free;
         }
-        XSEGLOG2(&lc, D, "Opened file %s. fd %d", name, fd);
+        flogger_debug(logger, "Opened file %s. fd %d", name, fd);
 
         e->fd = fd;
 
-        XSEGLOG2(&lc, D, "Inserting handler %llu for %s to fdcache",
-                 (long long unsigned) h, name);
+        flogger_debug(logger, "Inserting handler %llu for %s to fdcache",
+                      (long long unsigned)h, name);
         nh = xcache_insert(&pfiled->cache, h);
         if (nh != h) {
-            XSEGLOG2(&lc, D, "Partial cache hit for %s. New handler %llu",
-                     name, (long long unsigned) nh);
+            flogger_debug(logger, "Partial cache hit for %s. New handler %llu",
+                          name, (long long unsigned) nh);
             xcache_put(&pfiled->cache, h);
             h = nh;
         }
     } else {
-        XSEGLOG2(&lc, D, "Cache hit for %s, handler: %llu", name,
-                 (long long unsigned) h);
+        flogger_debug(logger, "Cache hit for %s, handler: %llu", name,
+                      (long long unsigned) h);
     }
 
     e = xcache_get_entry(&pfiled->cache, h);
     if (!e) {
-        XSEGLOG2(&lc, E, "Found handler but no valid fd cache entry");
+        flogger_error(logger, "Found handler but no valid fd cache entry");
         xcache_put(&pfiled->cache, h);
         fio->h = NoEntry;
         goto out_err;
@@ -909,13 +910,13 @@ static int dir_open(struct pfiled *pfiled, struct fio *fio,
     fio->h = h;
 
     //assert e->fd != -1 ?;
-    XSEGLOG2(&lc, I, "Dir open finished for %s", name);
+    flogger_info(logger, "Dir open finished for %s", name);
     return e->fd;
 
   out_free:
     xcache_free_new(&pfiled->cache, h);
   out_err:
-    XSEGLOG2(&lc, E, "Dir open failed for %s", name);
+    flogger_error(logger, "Dir open failed for %s", name);
     return -1;
 }
 
@@ -928,7 +929,7 @@ static void handle_read(struct peerd *peer, struct peer_req *pr)
     char *target = xseg_get_target(peer->xseg, req);
     char *data = xseg_get_data(peer->xseg, req);
 
-    XSEGLOG2(&lc, I, "Handle read started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle read started for pr: %p, req: %p", pr, pr->req);
 
     if (!req->size) {
         pfiled_complete(peer, pr);
@@ -936,7 +937,7 @@ static void handle_read(struct peerd *peer, struct peer_req *pr)
     }
 
     if (req->datalen < req->size) {
-        XSEGLOG2(&lc, E, "Request datalen is less than request size");
+        flogger_error(logger, "Request datalen is less than request size");
         pfiled_fail(peer, pr);
         return;
     }
@@ -944,17 +945,17 @@ static void handle_read(struct peerd *peer, struct peer_req *pr)
 
     fd = dir_open(pfiled, fio, target, req->targetlen, READ);
     if (fd < 0) {
-        XSEGLOG2(&lc, E, "Open failed");
+        flogger_error(logger, "Open failed");
         pfiled_fail(peer, pr);
         return;
     }
 
 
-    XSEGLOG2(&lc, D, "req->serviced: %llu, req->size: %llu", req->serviced,
-             req->size);
+    flogger_debug(logger, "req->serviced: %llu, req->size: %llu", req->serviced,
+                  req->size);
     r = pfiled_read(pfiled, fd, data, req->size, req->offset);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot read");
+        flogger_error(logger, "Cannot read");
         req->serviced = 0;
     } else if (r < req->size) {
         /* reached end of file. zero out the rest data buffer */
@@ -963,17 +964,17 @@ static void handle_read(struct peerd *peer, struct peer_req *pr)
     } else {
         req->serviced = r;
     }
-    XSEGLOG2(&lc, D, "req->serviced: %llu, req->size: %llu", req->serviced,
-             req->size);
+    flogger_debug(logger, "req->serviced: %llu, req->size: %llu", req->serviced,
+                  req->size);
 
   out:
     if (req->serviced > 0) {
-        XSEGLOG2(&lc, I, "Handle read completed for pr: %p, req: %p",
-                 pr, pr->req);
+        flogger_info(logger, "Handle read completed for pr: %p, req: %p",
+                     pr, pr->req);
         pfiled_complete(peer, pr);
     } else {
-        XSEGLOG2(&lc, E, "Handle read failed for pr: %p, req: %p",
-                 pr, pr->req);
+        flogger_error(logger, "Handle read failed for pr: %p, req: %p",
+                      pr, pr->req);
         pfiled_fail(peer, pr);
     }
     return;
@@ -989,17 +990,17 @@ static void handle_write(struct peerd *peer, struct peer_req *pr)
     char *target = xseg_get_target(peer->xseg, req);
     char *data = xseg_get_data(peer->xseg, req);
 
-    XSEGLOG2(&lc, I, "Handle write started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle write started for pr: %p, req: %p", pr, pr->req);
 
     if (req->datalen < req->size) {
-        XSEGLOG2(&lc, E, "Request datalen is less than request size");
+        flogger_error(logger, "Request datalen is less than request size");
         pfiled_fail(peer, pr);
         return;
     }
 
     fd = dir_open(pfiled, fio, target, req->targetlen, WRITE);
     if (fd < 0) {
-        XSEGLOG2(&lc, E, "Open failed");
+        flogger_error(logger, "Open failed");
         pfiled_fail(peer, pr);
         return;
     }
@@ -1017,30 +1018,30 @@ static void handle_write(struct peerd *peer, struct peer_req *pr)
         }
     }
 
-    XSEGLOG2(&lc, D, "req->serviced: %llu, req->size: %llu", req->serviced,
-             req->size);
+    flogger_debug(logger, "req->serviced: %llu, req->size: %llu", req->serviced,
+                  req->size);
     r = pfiled_write(pfiled, fd, data, req->size, req->offset);
     if (r < 0) {
         req->serviced = 0;
     } else {
         req->serviced = r;
     }
-    XSEGLOG2(&lc, D, "req->serviced: %llu, req->size: %llu", req->serviced,
-             req->size);
+    flogger_debug(logger, "req->serviced: %llu, req->size: %llu", req->serviced,
+                  req->size);
     r = fsync(fd);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Fsync failed.");
+        flogger_error(logger, "Fsync failed.");
         /* if fsync fails, then no bytes serviced correctly */
         req->serviced = 0;
     }
 
     if (req->serviced > 0) {
-        XSEGLOG2(&lc, I, "Handle write completed for pr: %p, req: %p",
-                 pr, pr->req);
+        flogger_info(logger, "Handle write completed for pr: %p, req: %p",
+                     pr, pr->req);
         pfiled_complete(peer, pr);
     } else {
-        XSEGLOG2(&lc, E, "Handle write failed for pr: %p, req: %p",
-                 pr, pr->req);
+        flogger_error(logger, "Handle write failed for pr: %p, req: %p",
+                      pr, pr->req);
         pfiled_fail(peer, pr);
     }
     return;
@@ -1064,7 +1065,7 @@ static void handle_info(struct peerd *peer, struct peer_req *pr)
         r = xseg_resize_request(peer->xseg, req, req->targetlen,
                                 sizeof(struct xseg_reply_info));
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Cannot resize request");
+            flogger_error(logger, "Cannot resize request");
             pfiled_fail(peer, pr);
             return;
         }
@@ -1072,17 +1073,17 @@ static void handle_info(struct peerd *peer, struct peer_req *pr)
         strncpy(target, buf, req->targetlen);
     }
 
-    XSEGLOG2(&lc, I, "Handle info started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle info started for pr: %p, req: %p", pr, pr->req);
     fd = dir_open(pfiled, fio, target, req->targetlen, READ);
     if (fd < 0) {
-        XSEGLOG2(&lc, E, "Dir open failed");
+        flogger_error(logger, "Dir open failed");
         pfiled_fail(peer, pr);
         return;
     }
 
     r = fstat(fd, &stat);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "fail in stat");
+        flogger_error(logger, "fail in stat");
         pfiled_fail(peer, pr);
         return;
     }
@@ -1090,7 +1091,7 @@ static void handle_info(struct peerd *peer, struct peer_req *pr)
     size = (uint64_t) stat.st_size;
     xinfo->size = size;
 
-    XSEGLOG2(&lc, I, "Handle info completed for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle info completed for pr: %p, req: %p", pr, pr->req);
     pfiled_complete(peer, pr);
 }
 
@@ -1108,35 +1109,35 @@ static void handle_copy(struct peerd *peer, struct peer_req *pr)
     ssize_t c = 0, bytes;
     ssize_t limit = 0;
 
-    XSEGLOG2(&lc, I, "Handle copy started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle copy started for pr: %p, req: %p", pr, pr->req);
     if (!buf) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         pfiled_fail(peer, pr);
         return;
     }
 
     r = is_target_valid_len(pfiled, xcopy->target, xcopy->targetlen, READ);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Source target not valid");
+        flogger_error(logger, "Source target not valid");
         goto out;
     }
 
     dst = dir_open(pfiled, fio, target, req->targetlen, WRITE);
     if (dst < 0) {
-        XSEGLOG2(&lc, E, "Fail in dst");
+        flogger_error(logger, "Fail in dst");
         r = dst;
         goto out;
     }
 
     src = open_file(pfiled, xcopy->target, xcopy->targetlen, READ);
     if (src < 0) {
-        XSEGLOG2(&lc, E, "Failed to open src");
+        flogger_error(logger, "Failed to open src");
         goto out;
     }
 
     r = fstat(src, &st);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "fail in stat for src %s", buf);
+        flogger_error(logger, "fail in stat for src %s", buf);
         goto out;
     }
 
@@ -1146,7 +1147,7 @@ static void handle_copy(struct peerd *peer, struct peer_req *pr)
     while (c < limit) {
         bytes = sendfile(dst, src, NULL, limit - c);
         if (bytes < 0) {
-            XSEGLOG2(&lc, E, "Copy failed for %s", buf);
+            flogger_error(logger, "Copy failed for %s", buf);
             r = -1;
             goto out;
         }
@@ -1165,12 +1166,12 @@ static void handle_copy(struct peerd *peer, struct peer_req *pr)
     }
     free(buf);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Handle copy failed for pr: %p, req: %p", pr,
-                 pr->req);
+        flogger_error(logger, "Handle copy failed for pr: %p, req: %p", pr,
+                      pr->req);
         pfiled_fail(peer, pr);
     } else {
-        XSEGLOG2(&lc, I, "Handle copy completed for pr: %p, req: %p", pr,
-                 pr->req);
+        flogger_info(logger, "Handle copy completed for pr: %p, req: %p", pr,
+                     pr->req);
         pfiled_complete(peer, pr);
     }
     return;
@@ -1186,38 +1187,38 @@ static void handle_delete(struct peerd *peer, struct peer_req *pr)
     int r;
     char *target = xseg_get_target(peer->xseg, req);
 
-    XSEGLOG2(&lc, I, "Handle delete started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle delete started for pr: %p, req: %p", pr, pr->req);
 
     if (!buf) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         pfiled_fail(peer, pr);
         return;
     }
 
     r = is_target_valid_len(pfiled, target, req->targetlen, READ);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Target not valid");
+        flogger_error(logger, "Target not valid");
         goto out;
     }
 
     r = create_path(buf, pfiled, target, req->targetlen, 0);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Create path failed");
+        flogger_error(logger, "Create path failed");
         goto out;
     }
     r = unlink(buf);
   out:
     free(buf);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Handle delete failed for pr: %p, req: %p", pr,
-                 pr->req);
+        flogger_error(logger, "Handle delete failed for pr: %p, req: %p", pr,
+                      pr->req);
         pfiled_fail(peer, pr);
     } else {
         strncpy(name, target, XSEG_MAX_TARGETLEN);
         name[XSEG_MAX_TARGETLEN] = 0;
         xcache_invalidate(&pfiled->cache, name);
-        XSEGLOG2(&lc, I, "Handle delete completed for pr: %p, req: %p", pr,
-                 pr->req);
+        flogger_info(logger, "Handle delete completed for pr: %p, req: %p", pr,
+                     pr->req);
         pfiled_complete(peer, pr);
     }
     return;
@@ -1232,7 +1233,7 @@ static int __get_precalculated_hash(struct peerd *peer, char *target,
     char *hash_file = NULL;
     struct pfiled *pfiled = __get_pfiled(peer);
 
-    XSEGLOG2(&lc, D, "Started.");
+    flogger_debug(logger, "Started.");
 
     hash_file = malloc(MAX_FILENAME_SIZE + 1);
     hash_file_len =
@@ -1243,24 +1244,24 @@ static int __get_precalculated_hash(struct peerd *peer, char *target,
                          HEXLIFIED_SHA256_DIGEST_SIZE, 0);
     if (r < 0) {
         if (errno != ENOENT) {
-            XSEGLOG2(&lc, E, "Error opening %s", hash_file);
+            flogger_error(logger, "Error opening %s", hash_file);
         } else {
-            XSEGLOG2(&lc, I, "No precalculated hash for %s", hash_file);
+            flogger_info(logger, "No precalculated hash for %s", hash_file);
             ret = 0;
         }
         goto out;
     }
     len = (uint32_t) r;
-    XSEGLOG2(&lc, D, "Read %u bytes", len);
+    flogger_debug(logger, "Read %u bytes", len);
 
     if (len == HEXLIFIED_SHA256_DIGEST_SIZE) {
         hash[HEXLIFIED_SHA256_DIGEST_SIZE] = 0;
-        XSEGLOG2(&lc, D, "Found hash for %s : %s", hash_file, hash);
+        flogger_debug(logger, "Found hash for %s : %s", hash_file, hash);
         ret = 0;
     }
   out:
     free(hash_file);
-    XSEGLOG2(&lc, D, "Finished.");
+    flogger_debug(logger, "Finished.");
     return ret;
 }
 
@@ -1273,7 +1274,7 @@ static int __set_precalculated_hash(struct peerd *peer, char *target,
     char *hash_file = NULL;
     struct pfiled *pfiled = __get_pfiled(peer);
 
-    XSEGLOG2(&lc, D, "Started.");
+    flogger_debug(logger, "Started.");
 
     hash_file = malloc(MAX_FILENAME_SIZE + 1);
     hash_file_len =
@@ -1285,20 +1286,20 @@ static int __set_precalculated_hash(struct peerd *peer, char *target,
                           S_IWOTH);
     if (r < 0) {
         if (errno != EEXIST) {
-            XSEGLOG2(&lc, E, "Error opening %s", hash_file);
+            flogger_error(logger, "Error opening %s", hash_file);
         } else {
-            XSEGLOG2(&lc, I, "Hash file already exists %s", hash_file);
+            flogger_info(logger, "Hash file already exists %s", hash_file);
             ret = 0;
         }
         goto out;
     }
 
     len = (uint32_t) r;
-    XSEGLOG2(&lc, D, "Wrote %u bytes", len);
+    flogger_debug(logger, "Wrote %u bytes", len);
     ret = 0;
   out:
     free(hash_file);
-    XSEGLOG2(&lc, D, "Finished.");
+    flogger_debug(logger, "Finished.");
     return ret;
 }
 
@@ -1330,17 +1331,17 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
 
     target = xseg_get_target(peer->xseg, req);
 
-    XSEGLOG2(&lc, I, "Handle hash started for pr: %p, req: %p", pr, pr->req);
+    flogger_info(logger, "Handle hash started for pr: %p, req: %p", pr, pr->req);
 
     if (!req->size) {
-        XSEGLOG2(&lc, E, "No request size provided");
+        flogger_error(logger, "No request size provided");
         r = -1;
         goto out;
     }
 
     r = is_target_valid_len(pfiled, target, req->targetlen, READ);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Source target not valid");
+        flogger_error(logger, "Source target not valid");
         goto out;
     }
 
@@ -1348,16 +1349,16 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
 
     r = __get_precalculated_hash(peer, target, req->targetlen, hash_name);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Error getting precalculated hash");
+        flogger_error(logger, "Error getting precalculated hash");
         goto out;
     }
 
     if (hash_name[0] != '\0') {
-        XSEGLOG2(&lc, I, "Precalucated hash found %s", hash_name);
+        flogger_info(logger, "Precalucated hash found %s", hash_name);
         goto found;
     }
 
-    XSEGLOG2(&lc, I, "No precalculated hash found");
+    flogger_info(logger, "No precalculated hash found");
 
     strncpy(name, target, req->targetlen);
     name[req->targetlen] = '\0';
@@ -1366,20 +1367,20 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
     //object_data = malloc(sizeof(char) * req->size);
     r = posix_memalign(&object_data, 512, sizeof(char) * req->size);
     if (!pathname || !object_data) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         goto out;
     }
 
     src = dir_open(pfiled, fio, target, req->targetlen, READ);
     if (src < 0) {
-        XSEGLOG2(&lc, E, "Fail in src");
+        flogger_error(logger, "Fail in src");
         r = dst;
         goto out;
     }
 
     c = pfiled_read(pfiled, src, object_data, req->size, req->offset);
     if (c < 0) {
-        XSEGLOG2(&lc, E, "Error reading from source");
+        flogger_error(logger, "Error reading from source");
         r = -1;
         goto out;
     }
@@ -1393,7 +1394,7 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
         }
     }
 
-    XSEGLOG2(&lc, D, "Read %llu, Trainling zeros %llu", sum, trailing_zeros);
+    flogger_debug(logger, "Read %llu, Trainling zeros %llu", sum, trailing_zeros);
 
     sum -= trailing_zeros;
     //calculate hash name
@@ -1406,7 +1407,7 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
     r = create_path(pathname, pfiled, hash_name, HEXLIFIED_SHA256_DIGEST_SIZE,
                     1);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Create path failed");
+        flogger_error(logger, "Create path failed");
         r = -1;
         goto out;
     }
@@ -1414,7 +1415,7 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
 
     dst = open_file(pfiled, hash_name, HEXLIFIED_SHA256_DIGEST_SIZE, READ);
     if (dst > 0) {
-        XSEGLOG2(&lc, I, "%s already exists, no write needed", pathname);
+        flogger_info(logger, "%s already exists, no write needed", pathname);
         req->serviced = req->size;
         r = 0;
         goto out;
@@ -1422,14 +1423,14 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
 
     tmpfile_pathname = malloc(MAX_PATH_SIZE + MAX_FILENAME_SIZE + 1);
     if (!tmpfile_pathname) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         r = -1;
         goto out;
     }
 
     tmpfile = malloc(MAX_FILENAME_SIZE);
     if (!tmpfile) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         r = -1;
         goto out;
     }
@@ -1446,45 +1447,45 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
     if (r < 0) {
         if (errno != EEXIST) {
             char error_str[1024];
-            XSEGLOG2(&lc, E, "Error opening %s (%s)", tmpfile_pathname,
-                     strerror_r(errno, error_str, 1023));
+            flogger_error(logger, "Error opening %s (%s)", tmpfile_pathname,
+                          strerror_r(errno, error_str, 1023));
         } else {
-            XSEGLOG2(&lc, E, "Error opening %s. Stale data found.",
-                     tmpfile_pathname);
+            flogger_error(logger, "Error opening %s. Stale data found.",
+                          tmpfile_pathname);
         }
         r = -1;
         goto out;
     } else if (r < sum) {
-        XSEGLOG2(&lc, E, "Error writting to dst file %s", tmpfile_pathname);
+        flogger_error(logger, "Error writting to dst file %s", tmpfile_pathname);
         r = -1;
         goto out_unlink;
     }
-    XSEGLOG2(&lc, D, "Opened %s and wrote", tmpfile);
+    flogger_debug(logger, "Opened %s and wrote", tmpfile);
 
     r = create_path(tmpfile_pathname, pfiled, tmpfile, len, 1);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Create path failed");
+        flogger_error(logger, "Create path failed");
         r = -1;
         goto out;
     }
 
     r = link(tmpfile_pathname, pathname);
     if (r < 0 && errno != EEXIST) {
-        XSEGLOG2(&lc, E, "Error linking tmp file %s. Errno %d",
-                 pathname, errno);
+        flogger_error(logger, "Error linking tmp file %s. Errno %d",
+                      pathname, errno);
         r = -1;
         goto out_unlink;
     }
 
     r = unlink(tmpfile_pathname);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Error unlinking tmp file %s", tmpfile_pathname);
+        flogger_warn(logger, "Error unlinking tmp file %s", tmpfile_pathname);
         r = 0;
     }
 
     r = __set_precalculated_hash(peer, target, req->targetlen, hash_name);
     if (r < 0) {
-        XSEGLOG2(&lc, W, "Error setting precalculated hash");
+        flogger_warn(logger, "Error setting precalculated hash");
         r = 0;
     }
 
@@ -1492,7 +1493,7 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
     r = xseg_resize_request(peer->xseg, pr->req, pr->req->targetlen,
                             sizeof(struct xseg_reply_hash));
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Resize request failed");
+        flogger_error(logger, "Resize request failed");
         r = -1;
         goto out;
     }
@@ -1509,12 +1510,12 @@ static void handle_hash(struct peerd *peer, struct peer_req *pr)
         close(dst);
     }
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Handle hash failed for pr: %p, req: %p. ",
-                 "Target %s", pr, pr->req, name);
+        flogger_error(logger, "Handle hash failed for pr: %p, req: %p. ",
+                      "Target %s", pr, pr->req, name);
         pfiled_fail(peer, pr);
     } else {
-        XSEGLOG2(&lc, I, "Handle hash completed for pr: %p, req: %p\n\t"
-                 "hashed %s to %s", pr, pr->req, name, hash_name);
+        flogger_info(logger, "Handle hash completed for pr: %p, req: %p\n\t"
+                     "hashed %s to %s", pr, pr->req, name, hash_name);
         pfiled_complete(peer, pr);
     }
     free(tmpfile_pathname);
@@ -1535,27 +1536,27 @@ static int __locked_by(char *lockfile, char *expected, uint32_t expected_len,
     uint32_t len;
     char tmpbuf[MAX_UNIQUESTR_LEN];
 
-    XSEGLOG2(&lc, D, "Started. Lockfile: %s, expected: %s, expected_len: %u",
-             lockfile, expected, expected_len);
+    flogger_debug(logger, "Started. Lockfile: %s, expected: %s, expected_len: %u",
+                  lockfile, expected, expected_len);
     r = read_path(lockfile, tmpbuf, MAX_UNIQUESTR_LEN, 0, direct);
     if (r < 0) {
         if (errno != ENOENT) {
-            XSEGLOG2(&lc, E, "Error opening %s", lockfile);
+            flogger_error(logger, "Error opening %s", lockfile);
         } else {
             //-2 == retry
-            XSEGLOG2(&lc, I, "lock file removed");
+            flogger_info(logger, "lock file removed");
             ret = -2;
         }
         goto out;
     }
     len = (uint32_t) r;
-    XSEGLOG2(&lc, D, "Read %u bytes", len);
+    flogger_debug(logger, "Read %u bytes", len);
     if (!strncmp(tmpbuf, expected, expected_len)) {
-        XSEGLOG2(&lc, D, "Lock file %s locked by us.", lockfile);
+        flogger_debug(logger, "Lock file %s locked by us.", lockfile);
         ret = 0;
     }
   out:
-    XSEGLOG2(&lc, D, "Finished. Lockfile: %s", lockfile);
+    flogger_debug(logger, "Finished. Lockfile: %s", lockfile);
     return ret;
 }
 
@@ -1563,7 +1564,7 @@ static int __try_lock(struct pfiled *pfiled, char *tmpfile, char *lockfile,
                       uint32_t flags, int fd)
 {
     int r, direct;
-    XSEGLOG2(&lc, D, "Started. Lockfile: %s, Tmpfile:%s", lockfile, tmpfile);
+    flogger_debug(logger, "Started. Lockfile: %s, Tmpfile:%s", lockfile, tmpfile);
 
     r = pfiled_write(pfiled, fd, pfiled->uniquestr, pfiled->uniquestr_len, 0);
     if (r < 0 || r < pfiled->uniquestr_len) {
@@ -1580,7 +1581,7 @@ static int __try_lock(struct pfiled *pfiled, char *tmpfile, char *lockfile,
     while (link(tmpfile, lockfile) < 0) {
         //actual error
         if (errno != EEXIST) {
-            XSEGLOG2(&lc, E, "Error linking %s to %s", tmpfile, lockfile);
+            flogger_error(logger, "Error linking %s to %s", tmpfile, lockfile);
             return -1;
         }
         r = __locked_by(lockfile, pfiled->uniquestr, pfiled->uniquestr_len,
@@ -1589,13 +1590,13 @@ static int __try_lock(struct pfiled *pfiled, char *tmpfile, char *lockfile,
             break;
         }
         if (flags & XF_NOSYNC) {
-            XSEGLOG2(&lc, D, "Could not get lock file %s, "
-                     "XF_NOSYNC set. Aborting", lockfile);
+            flogger_debug(logger, "Could not get lock file %s, "
+                          "XF_NOSYNC set. Aborting", lockfile);
             return -1;
         }
         sleep(1);
     }
-    XSEGLOG2(&lc, D, "Finished. Lockfile: %s", lockfile);
+    flogger_debug(logger, "Finished. Lockfile: %s", lockfile);
     return 0;
 }
 
@@ -1617,14 +1618,14 @@ static void handle_acquire(struct peerd *peer, struct peer_req *pr)
     tmpfile_pathname = malloc(MAX_PATH_SIZE + MAX_FILENAME_SIZE + 1);
 
     if (!buf || !tmpfile || !tmpfile_pathname || !lockfile_pathname) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         pfiled_fail(peer, pr);
         return;
     }
 
     r = is_target_valid_len(pfiled, target, req->targetlen, READ);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Target not valid");
+        flogger_error(logger, "Target not valid");
         goto out;
     }
 
@@ -1632,23 +1633,23 @@ static void handle_acquire(struct peerd *peer, struct peer_req *pr)
     buf_len =
         strjoin(buf, target, req->targetlen, LOCK_SUFFIX, LOCK_SUFFIX_LEN);
 
-    XSEGLOG2(&lc, I, "Started. Lockfile: %s", buf);
+    flogger_info(logger, "Started. Lockfile: %s", buf);
 
 
     tmpfile_len = strnjoin(tmpfile, 3, buf, buf_len,
                            pfiled->uniquestr, pfiled->uniquestr_len,
                            fio->str_id, FIO_STR_ID_LEN);
 
-    XSEGLOG2(&lc, I, "Trying to acquire lock %s", buf);
+    flogger_info(logger, "Trying to acquire lock %s", buf);
 
     if (!pfiled->lockpath_len) {
         if (create_path(tmpfile_pathname, pfiled, tmpfile, tmpfile_len, 1) < 0) {
-            XSEGLOG2(&lc, E, "Create path failed for %s", buf);
+            flogger_error(logger, "Create path failed for %s", buf);
             goto out;
         }
 
         if (create_path(lockfile_pathname, pfiled, buf, buf_len, 1) < 0) {
-            XSEGLOG2(&lc, E, "Create path failed for %s", buf);
+            flogger_error(logger, "Create path failed for %s", buf);
             goto out;
         }
     } else {
@@ -1669,7 +1670,7 @@ static void handle_acquire(struct peerd *peer, struct peer_req *pr)
     //              spin while not able to link
 
     //nfs v >= 3
-    XSEGLOG2(&lc, D, "Tmpfile: %s", tmpfile_pathname);
+    flogger_debug(logger, "Tmpfile: %s", tmpfile_pathname);
     flags = O_RDWR | O_CREAT | O_EXCL;
     if (pfiled->directio) {
         flags |= O_DIRECT;
@@ -1679,40 +1680,40 @@ static void handle_acquire(struct peerd *peer, struct peer_req *pr)
     if (fd < 0) {
         //actual error
         if (errno != EEXIST) {
-            XSEGLOG2(&lc, E, "Error opening %s", tmpfile_pathname);
+            flogger_error(logger, "Error opening %s", tmpfile_pathname);
             goto out;
         } else {
-            XSEGLOG2(&lc, E, "Error opening %s. Stale data found.",
-                     tmpfile_pathname);
+            flogger_error(logger, "Error opening %s. Stale data found.",
+                          tmpfile_pathname);
         }
         ret = -1;
     } else {
-        XSEGLOG2(&lc, D, "Tmpfile %s created. Trying to get lock",
-                 tmpfile_pathname);
+        flogger_debug(logger, "Tmpfile %s created. Trying to get lock",
+                      tmpfile_pathname);
         r = __try_lock(pfiled, tmpfile_pathname, lockfile_pathname,
                        req->flags, fd);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Trying to get lock %s failed", buf);
+            flogger_error(logger, "Trying to get lock %s failed", buf);
             ret = -1;
         } else {
-            XSEGLOG2(&lc, D, "Trying to get lock %s succeed", buf);
+            flogger_debug(logger, "Trying to get lock %s succeed", buf);
             ret = 0;
         }
         r = close(fd);
         if (r < 0) {
-            XSEGLOG2(&lc, W, "Error closing %s", tmpfile_pathname);
+            flogger_warn(logger, "Error closing %s", tmpfile_pathname);
         }
         r = unlink(tmpfile_pathname);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Error unlinking %s", tmpfile_pathname);
+            flogger_error(logger, "Error unlinking %s", tmpfile_pathname);
         }
     }
   out:
     if (ret < 0) {
-        XSEGLOG2(&lc, I, "Failed to acquire lock %s", buf);
+        flogger_info(logger, "Failed to acquire lock %s", buf);
         pfiled_fail(peer, pr);
     } else {
-        XSEGLOG2(&lc, I, "Acquired lock %s", buf);
+        flogger_info(logger, "Acquired lock %s", buf);
         pfiled_complete(peer, pr);
     }
     free(buf);
@@ -1733,26 +1734,26 @@ static void handle_release(struct peerd *peer, struct peer_req *pr)
     int r, buf_len, direct;
 
     if (!buf || !pathname) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         fail(peer, pr);
         return;
     }
 
     r = is_target_valid_len(pfiled, target, req->targetlen, READ);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Target not valid");
+        flogger_error(logger, "Target not valid");
         goto out;
     }
 
     buf_len =
         strnjoin(buf, 2, target, req->targetlen, LOCK_SUFFIX, LOCK_SUFFIX_LEN);
 
-    XSEGLOG2(&lc, I, "Started. Lockfile: %s", buf);
+    flogger_info(logger, "Started. Lockfile: %s", buf);
 
     if (!pfiled->lockpath_len) {
         r = create_path(pathname, pfiled, buf, buf_len, 0);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Create path failed for %s", buf);
+            flogger_error(logger, "Create path failed for %s", buf);
             goto out;
         }
     } else {
@@ -1767,7 +1768,7 @@ static void handle_release(struct peerd *peer, struct peer_req *pr)
                                                 direct)) {
         r = unlink(pathname);
         if (r < 0) {
-            XSEGLOG2(&lc, E, "Could not unlink %s", pathname);
+            flogger_error(logger, "Could not unlink %s", pathname);
             goto out;
         }
     } else {
@@ -1778,10 +1779,10 @@ static void handle_release(struct peerd *peer, struct peer_req *pr)
     if (r < 0) {
         fail(peer, pr);
     } else {
-        XSEGLOG2(&lc, I, "Released lockfile: %s", buf);
+        flogger_info(logger, "Released lockfile: %s", buf);
         complete(peer, pr);
     }
-    XSEGLOG2(&lc, I, "Finished. Lockfile: %s", buf);
+    flogger_info(logger, "Finished. Lockfile: %s", buf);
     free(buf);
     free(tmpbuf);
     free(pathname);
@@ -1851,7 +1852,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
         .on_put = cache_put,
     };
     if (!pfiled) {
-        XSEGLOG2(&lc, E, "Out of memory");
+        flogger_error(logger, "Out of memory");
         ret = -ENOMEM;
         goto out;
     }
@@ -1863,7 +1864,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     for (i = 0; i < peer->nr_ops; i++) {
         peer->peer_reqs[i].priv = malloc(sizeof(struct fio));
         if (!peer->peer_reqs->priv) {
-            XSEGLOG2(&lc, E, "Out of memory");
+            flogger_error(logger, "Out of memory");
             ret = -ENOMEM;
             goto out;
         }
@@ -1894,7 +1895,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     //TODO test path exist/is_dir/have_access
     pfiled->vpath_len = strlen(pfiled->vpath);
     if (!pfiled->vpath_len) {
-        XSEGLOG2(&lc, E, "Archipelago path was not provided");
+        flogger_error(logger, "Archipelago path was not provided");
         usage(argv[0]);
         return -1;
     }
@@ -1913,7 +1914,7 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
 
     r = getrlimit(RLIMIT_NOFILE, &rlim);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Could not get limit for max fds");
+        flogger_error(logger, "Could not get limit for max fds");
         return -1;
     }
     //TODO check nr_ops == nr_threads.
@@ -1926,8 +1927,8 @@ int custom_peer_init(struct peerd *peer, int argc, char *argv[])
     //check max fds. (> fdcache + nr_threads)
     //TODO assert fdcache > 2*nr_threads or add waitq
     if (rlim.rlim_cur < pfiled->cache.size + peer->nr_threads - 4) {
-        XSEGLOG2(&lc, E, "FD limit %d is less than cachesize + nr_ops -4(%u)",
-                 rlim.rlim_cur, pfiled->cache.size + peer->nr_ops - 4);
+        flogger_error(logger, "FD limit %d is less than cachesize + nr_ops -4(%u)",
+                      rlim.rlim_cur, pfiled->cache.size + peer->nr_ops - 4);
         return -1;
     }
 

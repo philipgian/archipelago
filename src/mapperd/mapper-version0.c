@@ -107,7 +107,7 @@ int read_map_v0(struct map *map, unsigned char *data)
         pos += v0_objectsize_in_map;
     }
 
-    XSEGLOG2(&lc, D, "Found %llu objects", i);
+    flogger_debug(logger, "Found %llu objects", i);
     map->size = i * MAPPER_DEFAULT_BLOCKSIZE;
     map->nr_objs = i;
 
@@ -143,8 +143,8 @@ struct xseg_request *__load_map_data_v0(struct peer_req *pr, struct map *map)
     uint64_t datalen;
 
     if (v0_chunked_read_size % v0_objectsize_in_map) {
-        XSEGLOG2(&lc, E, "v0_chunked_read_size should be a multiple of",
-                 "v0_objectsize_in_map");
+        flogger_error(logger, "v0_chunked_read_size should be a multiple of",
+                      "v0_objectsize_in_map");
         return NULL;
     }
 
@@ -153,7 +153,7 @@ struct xseg_request *__load_map_data_v0(struct peer_req *pr, struct map *map)
     req = get_request(pr, mapper->mbportno, map->volume, map->volumelen,
                       datalen);
     if (!req) {
-        XSEGLOG2(&lc, E, "Cannot get request for map %s", map->volume);
+        flogger_error(logger, "Cannot get request for map %s", map->volume);
         goto out_fail;
     }
 
@@ -163,8 +163,8 @@ struct xseg_request *__load_map_data_v0(struct peer_req *pr, struct map *map)
 
     r = send_request(pr, req);
     if (r < 0) {
-        XSEGLOG2(&lc, E, "Cannot send request %p, pr: %p, map: %s",
-                 req, pr, map->volume);
+        flogger_error(logger, "Cannot send request %p, pr: %p, map: %s",
+                      req, pr, map->volume);
         goto out_put;
     }
     return req;
@@ -207,7 +207,7 @@ int load_map_data_v0(struct peer_req *pr, struct map *map)
     wait_on_pr(pr, (!(req->state & XS_FAILED || req->state & XS_SERVED)));
 
     if (req->state & XS_FAILED) {
-        XSEGLOG2(&lc, E, "Map load failed for map %s", map->volume);
+        flogger_error(logger, "Map load failed for map %s", map->volume);
         r = -EIO;
         put_request(pr, req);
         goto out_restore;
