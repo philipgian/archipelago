@@ -34,9 +34,9 @@ set_target_properties(archip-dummy
 	COMPILE_DEFINITIONS "MT"
 	)
 
-set(RADOS_SRC radosd/radosd.c peer.c util/hash.c)
+set(RADOS_SRC radosd/radosd.c peer2.c util/hash.c pidfile.c thpool.c)
 add_executable(archip-radosd ${RADOS_SRC})
-target_link_libraries(archip-radosd xseg pthread rados crypto)
+target_link_libraries(archip-radosd xseg pthread rados crypto ${GLIB_LIBRARIES})
 set_target_properties(archip-radosd
 	PROPERTIES
 	COMPILE_DEFINITIONS "MT"
@@ -55,9 +55,9 @@ set_target_properties(archip-benchfd
 	)
 
 
-set(FILED_SRC filed/filed.c peer.c util/hash.c)
+set(FILED_SRC filed/filed.c peer2.c util/hash.c pidfile.c thpool.c)
 add_executable(archip-filed ${FILED_SRC})
-target_link_libraries(archip-filed xseg pthread crypto)
+target_link_libraries(archip-filed xseg pthread crypto ${GLIB_LIBRARIES})
 set_target_properties(archip-filed
 	PROPERTIES
 	COMPILE_DEFINITIONS "MT"
