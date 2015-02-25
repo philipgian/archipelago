@@ -21,17 +21,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define _GNU_SOURCE
 #include <xseg/xcache.h>
 
-#define FIO_STR_ID_LEN		3
-#define LOCK_SUFFIX		"_lock"
-#define LOCK_SUFFIX_LEN		5
-#define HASH_SUFFIX		"_hash"
-#define HASH_SUFFIX_LEN		5
-#define MAX_PATH_SIZE		1024
-#define MAX_FILENAME_SIZE 	(XSEG_MAX_TARGETLEN + LOCK_SUFFIX_LEN + MAX_UNIQUESTR_LEN + FIO_STR_ID_LEN)
-#define MAX_PREFIX_LEN		10
-#define MAX_UNIQUESTR_LEN	128
-#define SNAP_SUFFIX		"_snap"
-#define SNAP_SUFFIX_LEN		5
+#define FIO_STR_ID_LEN        3
+#define LOCK_SUFFIX           "_lock"
+#define LOCK_SUFFIX_LEN        5
+#define HASH_SUFFIX           "_hash"
+#define HASH_SUFFIX_LEN        5
+#define MAX_PATH_SIZE          1024
+#define MAX_FILENAME_SIZE      (XSEG_MAX_TARGETLEN + LOCK_SUFFIX_LEN + MAX_UNIQUESTR_LEN + FIO_STR_ID_LEN)
+#define MAX_PREFIX_LEN         10
+#define MAX_UNIQUESTR_LEN      128
+#define SNAP_SUFFIX            "_snap"
+#define SNAP_SUFFIX_LEN        5
 
 #define WRITE 1
 #define READ 2
@@ -52,13 +52,13 @@ struct pfiled {
     uint32_t lockpath_len;
     uint32_t uniquestr_len;
     long maxfds;
-    uint32_t directio;
+    int directio;
     char vpath[MAX_PATH_SIZE + 1];
     char lockpath[MAX_PATH_SIZE + 1];
     char prefix[MAX_PREFIX_LEN + 1];
     char uniquestr[MAX_UNIQUESTR_LEN + 1];
     struct xcache cache;
-    uint32_t migrate;
+    int migrate;
 };
 
 /*
@@ -77,4 +77,4 @@ static int open_file_write_path(struct pfiled *pfiled, char *path);
 static int open_file_read_path(struct pfiled *pfiled, char *path);
 
 
-#endif                          /* end of include guard: _FILE_H */
+#endif /* end of include guard: _FILE_H */
