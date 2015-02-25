@@ -369,7 +369,6 @@ class Filed(MTpeer):
         self.direct = direct
         self.pithos_migrate = pithos_migrate
         self.lock_dir = lock_dir
-        nr_threads = nr_ops
         if self.fdcache and fdcache < 2*nr_threads:
             raise Error("Fdcache should be greater than 2*nr_threads")
 
