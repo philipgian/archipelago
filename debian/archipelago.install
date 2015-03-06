@@ -8,6 +8,8 @@ usr/bin/archip-vlmcd
 usr/bin/archip-poold
 
 contrib/finalize_upgrade_0.4 usr/share/archipelago/tools
+contrib/finalize_upgrade_0.5 usr/share/archipelago/tools
+contrib/force_pithos_mapfile_upgrade usr/share/archipelago/tools
 
 etc/archipelago/archipelago.conf
 etc/archipelago/logging.conf
